@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7A1F12">
+  <title>Acompanhar pedido | Lanchonete Casa Branca</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/acompanhamento.css">
+</head>
+<body class="acompanhamento-body">
+  <header class="acompanhamento-header">
+    <a class="acompanhamento-voltar" href="index.html">← Cardápio</a>
+    <p>LANCHONETE CASA BRANCA</p>
+    <h1>Acompanhar pedido</h1>
+  </header>
+
+  <main class="acompanhamento-main">
+    <p id="tracking-state" class="tracking-state" role="status" aria-live="polite">Carregando pedido...</p>
+    <p id="tracking-network" class="tracking-network" hidden></p>
+
+    <section id="tracking-order" class="tracking-order" hidden aria-labelledby="tracking-number">
+      <div class="tracking-order-header">
+        <div>
+          <span class="tracking-eyebrow">PEDIDO</span>
+          <h2 id="tracking-number"></h2>
+          <p id="tracking-date"></p>
+        </div>
+        <span id="tracking-type" class="tracking-type"></span>
+      </div>
+
+      <div id="tracking-announcement" class="tracking-announcement" role="status" aria-live="polite"></div>
+      <p id="tracking-estimate" class="tracking-estimate" hidden></p>
+      <section id="tracking-timeline-section" class="tracking-timeline-section" aria-labelledby="tracking-timeline-title">
+        <h3 id="tracking-timeline-title">Etapas do pedido</h3>
+        <ol id="tracking-timeline" class="tracking-timeline" aria-label="Linha do tempo do pedido"></ol>
+      </section>
+
+      <section class="tracking-summary" aria-labelledby="tracking-summary-title">
+        <h3 id="tracking-summary-title">Resumo do pedido</h3>
+        <ul id="tracking-items" class="tracking-items"></ul>
+        <div class="tracking-total"><span>Total</span><strong id="tracking-total"></strong></div>
+        <p id="tracking-payment"></p>
+      </section>
+
+      <p id="tracking-cancel-reason" class="tracking-cancel-reason" hidden></p>
+      <div class="tracking-actions">
+        <a id="tracking-whatsapp" class="tracking-button tracking-button-whatsapp" href="https://wa.me/5574999177156" target="_blank" rel="noopener">Falar com a lanchonete</a>
+        <a id="tracking-new-order" class="tracking-button tracking-button-new" href="index.html" hidden>Fazer novo pedido</a>
+      </div>
+    </section>
+
+    <section id="tracking-recent-section" class="tracking-recent-section" aria-labelledby="tracking-recent-title" hidden>
+      <h2 id="tracking-recent-title">Meus pedidos recentes</h2>
+      <ul id="tracking-recent-list" class="tracking-recent-list"></ul>
+      <form id="tracking-lookup-form" class="tracking-lookup-form">
+        <h3>Buscar neste aparelho</h3>
+        <label for="tracking-lookup-number">Número do pedido</label>
+        <input id="tracking-lookup-number" class="form-input" inputmode="numeric" required>
+        <label for="tracking-lookup-phone">Telefone usado no pedido</label>
+        <input id="tracking-lookup-phone" class="form-input" type="tel" autocomplete="tel" required>
+        <button class="tracking-button tracking-button-new" type="submit">Buscar pedido</button>
+        <p id="tracking-lookup-message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <script type="module" src="js/acompanhamento.js"></script>
+</body>
+</html>

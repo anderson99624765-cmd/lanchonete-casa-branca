@@ -33,6 +33,23 @@ export const CONFIG_PADRAO = {
   taxaValor: 3.00,
   minimoEntrega: 10.00,
   modoDestaque: "promocoes", // "promocoes" ou "destaques"
+  statusWhatsappAutomaticos: [
+    "Em preparo",
+    "Saiu para entrega",
+    "Pronto para retirada",
+    "Entregue",
+    "Retirado",
+    "Cancelado"
+  ],
+  mensagensWhatsapp: {
+    Recebido: "Olá, {nome}! 😊 Recebemos o seu pedido #{numero_pedido} na {nome_lanchonete}. Já vamos confirmar e começar o preparo!",
+    "Em preparo": "Olá, {nome}! 👨‍🍳 Seu pedido #{numero_pedido} já está em preparo, feito com muito carinho. Previsão: {previsao}.",
+    "Saiu para entrega": "Olá, {nome}! 🛵 Seu pedido #{numero_pedido} saiu para entrega e já está a caminho de {endereco}. Acompanhe: {link_acompanhamento}",
+    "Pronto para retirada": "Olá, {nome}! ✅ Seu pedido #{numero_pedido} está pronto para retirada na Praça da quadra. Pode vir buscar!",
+    Entregue: "Olá, {nome}! Pedido #{numero_pedido} entregue. Obrigado pela preferência e bom apetite! ❤️ {nome_lanchonete} – O sabor que faz você se sentir em casa.",
+    Retirado: "Olá, {nome}! Pedido #{numero_pedido} retirado. Obrigado pela preferência e bom apetite! ❤️ {nome_lanchonete} – O sabor que faz você se sentir em casa.",
+    Cancelado: "Olá, {nome}. Infelizmente precisamos cancelar o pedido #{numero_pedido}. Motivo: {motivo}. Qualquer dúvida, estamos à disposição."
+  },
   cores: {
     primary: "#7A1F12",
     primaryDark: "#5A140B",

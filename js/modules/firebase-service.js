@@ -79,6 +79,7 @@ const STORAGE_KEYS = {
   CATEGORIAS: 'casabranca_db_categorias',
   PRODUTOS: 'casabranca_db_produtos',
   PEDIDOS: 'casabranca_db_pedidos',
+  PEDIDOS_RECENTES: 'casabranca_pedidos_recentes',
   CLIENTES: 'casabranca_db_clientes'
 };
 
@@ -588,64 +589,128 @@ function carregarClientesLocal(callback) {
 // --------------------------------------------------------------------------
 export async function criarPedido(pedido) {
   const numeroPedido = Math.floor(1000 + Math.random() * 9000);
-  const pedidoCompleto = {
-    ...pedido,
-    numero: numeroPedido,
-    status: "Novo",
-    criadoEm: new Date().toISOString(),
-    criadoEmTimestamp: Date.now()
-  };
-
-  try {
-    let pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
-    const novoId = "ped-" + Date.now();
-    pedidos.unshift({ id: novoId, ...pedidoCompleto });
-    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
-    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
-  } catch (e) {
-    console.warn("Erro ao salvar pedido localmente:", e);
-  }
+  const criadoEm = new Date().toISOString();
+  const criadoEmTimestamp = Date.now();
+  const status = "Recebido";
 
   if (conexaoValida && db) {
-    const pedidosRef = ref(db, "pedidos");
-    const novoPedidoRef = push(pedidosRef);
-    await set(novoPedidoRef, pedidoCompleto);
-    return { id: novoPedidoRef.key, ...pedidoCompleto };
+    const novoPedidoRef = push(ref(db, "pedidos"));
+    const id = novoPedidoRef.key;
+    const eventoInicialRef = push(ref(db, `pedidos/${id}/historico`));
+    // O nó público usa o ID aleatório como chave e não inclui dados pessoais do cliente.
+    const pedidoPublico = {
+      numero: numeroPedido,
+      status,
+      criadoEm,
+      criadoEmTimestamp,
+      tipo: pedido.tipo,
+      itens: (pedido.itens || []).map(({ nome, quantidade, precoUnit }) => ({ nome, quantidade, precoUnit })),
+      total: pedido.total,
+      pagamento: pedido.pagamento?.forma || "não informado",
+      historico: {
+        [eventoInicialRef.key]: { status, dataHora: criadoEm }
+      }
+    };
+    // Dados de contato e observações ficam separados, acessíveis apenas ao administrador.
+    const pedidoPrivado = {
+      cliente: pedido.cliente,
+      itens: pedido.itens || [],
+      subtotal: pedido.subtotal,
+      taxa: pedido.taxa,
+      pagamento: pedido.pagamento,
+      observacaoGeral: pedido.observacaoGeral || ""
+    };
+
+    await update(ref(db), {
+      [`pedidos/${id}`]: pedidoPublico,
+      [`pedidosPrivados/${id}`]: pedidoPrivado
+    });
+
+    const pedidoCompleto = { id, ...pedidoPublico, ...pedidoPrivado };
+    armazenarPedidoLocal(pedidoCompleto);
+    registrarPedidoRecente(pedidoCompleto);
+    return pedidoCompleto;
   }
 
-  return { id: "ped-" + Date.now(), ...pedidoCompleto };
+  const id = `ped-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const pedidoCompleto = {
+    id,
+    ...pedido,
+    numero: numeroPedido,
+    status,
+    criadoEm,
+    criadoEmTimestamp,
+    historico: { [`evt-${criadoEmTimestamp}`]: { status, dataHora: criadoEm } }
+  };
+  armazenarPedidoLocal(pedidoCompleto);
+  registrarPedidoRecente(pedidoCompleto);
+  return pedidoCompleto;
 }
 
 export function assinarPedidos(callback) {
-  if (conexaoValida && db) {
-    const pedidosRef = ref(db, "pedidos");
-    return onValue(pedidosRef, (snapshot) => {
-      const dados = [];
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          dados.push({ id: child.key, ...child.val() });
-        });
-        dados.sort((a, b) => (b.criadoEmTimestamp || 0) - (a.criadoEmTimestamp || 0));
-      }
-      callback(dados);
-    }, (err) => {
-      console.warn("RTDB pedidos listener falhou:", err);
-      carregarPedidosLocal(callback);
-    });
-  } else {
-    carregarPedidosLocal(callback);
+  const caminhoPedidos = "/pedidos";
+  console.log("[Pedidos] Caminho lido:", caminhoPedidos, conexaoValida ? "(Firebase RTDB)" : "(LocalStorage)");
 
-    const onBroadcast = (e) => {
-      if (e.data?.tipo === 'pedidos_alterados') {
-        carregarPedidosLocal(callback);
-      }
+  if (conexaoValida && db) {
+    let unsubscribeLocal = null;
+    let dadosPublicos = {};
+    let dadosPrivados = {};
+    const emitirPedidos = () => {
+      const dados = Object.keys(dadosPublicos).map((id) => ({
+        id,
+        ...dadosPublicos[id],
+        ...(dadosPrivados[id] || {})
+      }));
+      dados.sort((a, b) => (b.criadoEmTimestamp || 0) - (a.criadoEmTimestamp || 0));
+      console.log("[Pedidos] Snapshot bruto (Firebase):", dadosPublicos);
+      console.log("[Pedidos] Lista filtrada (status Recebido):", dados.filter((pedido) => pedido.status === "Recebido" || pedido.status === "Novo"));
+      callback(dados);
     };
-    if (canalSync) canalSync.addEventListener('message', onBroadcast);
+    const iniciarFallbackLocal = (err) => {
+      console.warn("RTDB pedidos listener falhou:", err);
+      if (!unsubscribeLocal) unsubscribeLocal = assinarPedidosLocal(callback);
+    };
+    const unsubscribePublicos = onValue(ref(db, caminhoPedidos), (snapshot) => {
+      dadosPublicos = snapshot.val() || {};
+      emitirPedidos();
+    }, iniciarFallbackLocal);
+    const unsubscribePrivados = onValue(ref(db, "pedidosPrivados"), (snapshot) => {
+      dadosPrivados = snapshot.val() || {};
+      emitirPedidos();
+    }, iniciarFallbackLocal);
 
     return () => {
-      if (canalSync) canalSync.removeEventListener('message', onBroadcast);
+      unsubscribePublicos();
+      unsubscribePrivados();
+      if (unsubscribeLocal) unsubscribeLocal();
     };
   }
+
+  return assinarPedidosLocal(callback);
+}
+
+function assinarPedidosLocal(callback) {
+  const notificar = () => carregarPedidosLocal((pedidos) => {
+    console.log("[Pedidos] Snapshot bruto (LocalStorage):", pedidos);
+    console.log("[Pedidos] Lista filtrada (status Recebido):", pedidos.filter((pedido) => pedido.status === "Recebido" || pedido.status === "Novo"));
+    callback(pedidos);
+  });
+  notificar();
+
+  const onStorage = (event) => {
+    if (event.key === STORAGE_KEYS.PEDIDOS) notificar();
+  };
+  const onBroadcast = (event) => {
+    if (event.data?.tipo === 'pedidos_alterados') notificar();
+  };
+
+  window.addEventListener('storage', onStorage);
+  if (canalSync) canalSync.addEventListener('message', onBroadcast);
+
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    if (canalSync) canalSync.removeEventListener('message', onBroadcast);
+  };
 }
 
 function carregarPedidosLocal(callback) {
@@ -658,27 +723,168 @@ function carregarPedidosLocal(callback) {
   }
 }
 
-export async function atualizarStatusPedido(pedidoId, novoStatus) {
+function armazenarPedidoLocal(pedido) {
   try {
     let pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
-    const p = pedidos.find(item => item.id === pedidoId);
-    if (p) {
-      p.status = novoStatus;
-      p.atualizadoEm = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
-      if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
-    }
+    pedidos = pedidos.filter((item) => item.id !== pedido.id);
+    pedidos.unshift(pedido);
+    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
+    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
   } catch (e) {
-    console.warn("Erro ao atualizar status local:", e);
+    console.warn("Erro ao guardar pedido localmente:", e);
+  }
+}
+
+function registrarPedidoRecente(pedido) {
+  try {
+    const existentes = obterPedidosRecentes();
+    const anterior = existentes.find((item) => item.id === pedido.id);
+    const recentes = existentes.filter((item) => item.id !== pedido.id);
+    recentes.unshift({
+      id: pedido.id,
+      numero: pedido.numero,
+      telefone: String(pedido.cliente?.telefone || anterior?.telefone || "").replace(/\D/g, ""),
+      tipo: pedido.tipo,
+      status: pedido.status,
+      criadoEm: pedido.criadoEm
+    });
+    localStorage.setItem(STORAGE_KEYS.PEDIDOS_RECENTES, JSON.stringify(recentes.slice(0, 10)));
+    localStorage.setItem("casabranca_ultimo_pedido_id", pedido.id);
+  } catch (e) {
+    console.warn("Não foi possível guardar a lista local de pedidos:", e);
+  }
+}
+
+export function atualizarPedidoRecente(pedido) {
+  registrarPedidoRecente(pedido);
+}
+
+export function obterPedidosRecentes() {
+  try {
+    const recentes = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS_RECENTES) || "[]");
+    return Array.isArray(recentes) ? recentes : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function atualizarPedidoLocal(pedidoId, alteracoes, eventoHistorico = null) {
+  try {
+    const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
+    const pedido = pedidos.find((item) => item.id === pedidoId);
+    if (!pedido) return;
+    Object.assign(pedido, alteracoes);
+    if (eventoHistorico) {
+      pedido.historico = pedido.historico || {};
+      pedido.historico[`evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`] = eventoHistorico;
+    }
+    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
+    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
+    const recentes = obterPedidosRecentes().map((item) => item.id === pedidoId ? { ...item, status: pedido.status } : item);
+    localStorage.setItem(STORAGE_KEYS.PEDIDOS_RECENTES, JSON.stringify(recentes));
+  } catch (e) {
+    console.warn("Erro ao atualizar pedido local:", e);
+  }
+}
+
+export function assinarPedidoPublico(pedidoId, callback, aoFalhar = () => {}) {
+  if (!pedidoId || /[.#$/\[\]]/.test(pedidoId)) {
+    aoFalhar(new Error("Identificador de pedido inválido."));
+    return () => {};
   }
 
   if (conexaoValida && db) {
-    return update(ref(db, `pedidos/${pedidoId}`), {
-      status: novoStatus,
-      atualizadoEm: new Date().toISOString()
-    });
+    return onValue(ref(db, `pedidos/${pedidoId}`), (snapshot) => {
+      callback(snapshot.exists() ? { id: pedidoId, ...snapshot.val() } : null);
+    }, aoFalhar);
   }
+
+  const notificar = () => {
+    try {
+      const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
+      callback(pedidos.find((pedido) => pedido.id === pedidoId) || null);
+    } catch (e) {
+      aoFalhar(e);
+    }
+  };
+  notificar();
+  const onStorage = (event) => {
+    if (event.key === STORAGE_KEYS.PEDIDOS) notificar();
+  };
+  const onBroadcast = (event) => {
+    if (event.data?.tipo === 'pedidos_alterados') notificar();
+  };
+  window.addEventListener('storage', onStorage);
+  if (canalSync) canalSync.addEventListener('message', onBroadcast);
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    if (canalSync) canalSync.removeEventListener('message', onBroadcast);
+  };
+}
+
+export async function atualizarStatusPedido(pedidoId, novoStatus, opcoes = {}) {
+  const dataHora = new Date().toISOString();
+  const evento = { status: novoStatus, dataHora };
+  const alteracoes = {
+    [`pedidos/${pedidoId}/status`]: novoStatus,
+    [`pedidos/${pedidoId}/atualizadoEm`]: dataHora
+  };
+  if (opcoes.motivoCancelamento) {
+    evento.motivo = opcoes.motivoCancelamento;
+    alteracoes[`pedidos/${pedidoId}/motivoCancelamento`] = opcoes.motivoCancelamento;
+  }
+  if (opcoes.estimativa) alteracoes[`pedidos/${pedidoId}/estimativa`] = opcoes.estimativa;
+
+  if (conexaoValida && db) {
+    const eventoRef = push(ref(db, `pedidos/${pedidoId}/historico`));
+    alteracoes[`pedidos/${pedidoId}/historico/${eventoRef.key}`] = evento;
+    return update(ref(db), alteracoes);
+  }
+
+  atualizarPedidoLocal(pedidoId, {
+    status: novoStatus,
+    atualizadoEm: dataHora,
+    ...(opcoes.motivoCancelamento ? { motivoCancelamento: opcoes.motivoCancelamento } : {}),
+    ...(opcoes.estimativa ? { estimativa: opcoes.estimativa } : {})
+  }, evento);
   return true;
+}
+
+export async function salvarEstimativaPedido(pedidoId, estimativa) {
+  if (conexaoValida && db) {
+    return update(ref(db), { [`pedidos/${pedidoId}/estimativa`]: estimativa });
+  }
+  atualizarPedidoLocal(pedidoId, { estimativa });
+  return true;
+}
+
+export async function registrarNotificacaoPedido(pedidoId, status, enviado) {
+  const notificacao = {
+    status: String(status || ''),
+    dataHora: new Date().toISOString(),
+    enviado: Boolean(enviado)
+  };
+
+  if (conexaoValida && db) {
+    const notificacaoRef = push(ref(db, `pedidos/${pedidoId}/notificacoes`));
+    await set(notificacaoRef, notificacao);
+    return { id: notificacaoRef.key, ...notificacao };
+  }
+
+  try {
+    const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || '[]');
+    const pedido = pedidos.find((item) => item.id === pedidoId);
+    if (!pedido) throw new Error('Pedido não encontrado no armazenamento local.');
+    pedido.notificacoes = pedido.notificacoes || {};
+    const id = `aviso-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    pedido.notificacoes[id] = notificacao;
+    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
+    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
+    return { id, ...notificacao };
+  } catch (error) {
+    console.error('Erro ao registrar aviso do pedido:', error);
+    throw error;
+  }
 }
 
 // --------------------------------------------------------------------------

@@ -361,9 +361,10 @@ class CarrinhoService {
       observacaoGeral: this.obsGeral
     };
 
+    let pedidoCriado = null;
     let numeroPedido = Math.floor(1000 + Math.random() * 9000);
     try {
-      const pedidoCriado = await criarPedido(pedidoPayload);
+      pedidoCriado = await criarPedido(pedidoPayload);
       if (pedidoCriado && pedidoCriado.numero) {
         numeroPedido = pedidoCriado.numero;
       }
@@ -372,7 +373,10 @@ class CarrinhoService {
     }
 
     // 7. Monta mensagem amigável e estruturada para WhatsApp
-    const msgWhatsApp = this.montarMensagemWhatsApp(numeroPedido);
+    const linkAcompanhamento = pedidoCriado?.id
+      ? `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, '')}acompanhar.html?pedido=${encodeURIComponent(pedidoCriado.id)}`
+      : '';
+    const msgWhatsApp = this.montarMensagemWhatsApp(numeroPedido, linkAcompanhamento);
     const whatsappNum = (this.config && this.config.whatsapp) ? limparTelefone(this.config.whatsapp) : '74999177156';
     const linkZap = `https://wa.me/55${whatsappNum}?text=${encodeURIComponent(msgWhatsApp)}`;
 
@@ -385,11 +389,12 @@ class CarrinhoService {
 
     // 9. Redireciona para o WhatsApp
     setTimeout(() => {
-      window.open(linkZap, '_blank');
+      window.open(linkZap, '_blank', 'noopener');
+      if (pedidoCriado?.id) window.location.assign(linkAcompanhamento);
     }, 400);
   }
 
-  montarMensagemWhatsApp(numeroPedido) {
+  montarMensagemWhatsApp(numeroPedido, linkAcompanhamento = '') {
     const horaAgora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     let msg = `🏡 *PEDIDO #${numeroPedido} - LANCHONETE CASA BRANCA*\n`;
     msg += `🕒 _${horaAgora}_\n`;
@@ -445,6 +450,7 @@ class CarrinhoService {
     }
 
     msg += `------------------------------------\n`;
+    if (linkAcompanhamento) msg += `📲 *Acompanhe seu pedido:* ${linkAcompanhamento}\n`;
     msg += `_Obrigado pela preferência! "O sabor que faz você se sentir em casa."_`;
 
     return msg;

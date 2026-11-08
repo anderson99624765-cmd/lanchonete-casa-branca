@@ -49,62 +49,38 @@ O acesso ao painel administrativo (`admin.html`) foi construído com as seguinte
 
 ## 🛡️ 2. Regras de Segurança do Firebase Realtime Database
 
-Cole o conteúdo de [`database.rules.json`](file:///home/anderson/Documentos/lanchonete-casa-branca/database.rules.json) na aba **Regras** do seu Realtime Database:
+Cole o conteúdo completo do arquivo [database.rules.json](database.rules.json) na aba **Regras** do Realtime Database. As regras deixam a listagem de `/pedidos` e a leitura de `/pedidosPrivados` restritas ao admin. O cliente pode ler somente `/pedidos/{id}` quando possui o ID aleatório; esse nó contém apenas dados de acompanhamento, sem telefone ou endereço. A gravação pública só cria registros novos; status, histórico, previsão e motivo de cancelamento exigem admin.
 
-```json
-{
-  "rules": {
-    "config": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "categorias": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "produtos": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "clientes": {
-      ".read": "auth != null",
-      "$telefone": {
-        ".read": true,
-        ".write": true
-      }
-    },
-    "pedidos": {
-      ".read": "auth != null",
-      "$pedidoId": {
-        ".read": "auth != null",
-        ".write": true
-      }
-    }
-  }
-}
-```
+As regras identificam o administrador pelo e-mail `casabranca@gmail.com`. Se a conta do Firebase Auth do proprietário usa outro e-mail, substitua esse e-mail nas condições de administrador do arquivo de regras antes de publicar.
 
-### Se desejar restringir apenas para o seu UID específico:
-Caso você queira que **somente o seu UID específico** consiga alterar o cardápio e ver os pedidos (bloqueando qualquer outro usuário criado acidentalmente no Firebase):
-1. No Firebase Console, vá em **Authentication > Users** e copie o **UID do usuário**.
-2. Substitua `"auth != null"` por `"auth != null && auth.uid == 'SEU_UID_AQUI'"`.
+## 📦 3. Acompanhamento de Pedidos
+
+Após finalizar, o cliente vai para `acompanhar.html` e recebe no WhatsApp um link privado baseado no ID do pedido. A tela acompanha as etapas em tempo real, mostra os horários do histórico, previsão e motivo de cancelamento. O painel oferece a próxima etapa correta para entrega ou retirada, campo de previsão, cancelamento e aviso pelo WhatsApp.
+
+O cabeçalho do cardápio abre **Meus pedidos** e mostra pedidos recentes salvos no aparelho. A busca por número e telefone verifica somente essa lista local; uma busca remota segura entre aparelhos requer um endpoint de servidor/Cloud Function. O link direto funciona em outro aparelho porque o ID aleatório do pedido é a credencial de acesso ao resumo público. Não compartilhe esse link com terceiros.
+
+Este projeto não tem backend/Cloud Functions. Por isso, o número curto atual continua sendo apenas um identificador de exibição aleatório, não uma sequência global garantida; números sequenciais sem colisões exigem alocação transacional no servidor. O ID do banco continua sendo o `push()` aleatório e nunca depende desse número curto.
+
+## 🟢 Avisos de Status pelo WhatsApp
+
+No painel, o proprietário pode escolher os status que abrem o aviso automaticamente e editar os modelos em **Configurações > Mensagens do WhatsApp**. O botão do cartão sempre permite abrir o mesmo editor manualmente. O site usa links `wa.me`, sem API paga; o proprietário revisa e envia a mensagem no próprio WhatsApp. Depois, deve confirmar no painel para registrar `enviado: true`; abrir o WhatsApp sozinho não comprova o envio. Os avisos ficam em `/pedidos/{id}/notificacoes`, e somente o admin autorizado pode gravá-los conforme as regras.
 
 ---
 
-## 👤 3. Passo a Passo do Primeiro Acesso (Criando o Dono)
+## 👤 4. Passo a Passo do Primeiro Acesso (Criando o Dono)
 
 1. Acesse o [Console do Firebase](https://console.firebase.google.com/).
 2. Abra o projeto da **Lanchonete Casa Branca**.
 3. No menu lateral, clique em **Criação > Authentication**.
 4. Certifique-se de que o método **E-mail/senha** está ativado na aba *Sign-in method*.
 5. Na aba **Users (Usuários)**, clique no botão azul **"Adicionar usuário"**.
-6. Digite o e-mail oficial do dono (ex.: `contato@lanchonetecasabranca.com`) e crie uma senha inicial forte.
+6. Crie o usuário com o e-mail permitido nas regras (`casabranca@gmail.com`, ou o e-mail que você configurou nelas) e uma senha inicial forte.
 7. O Firebase criará a conta e exibirá na tabela o e-mail, a data de criação e a coluna **UID do usuário** (um código como `f482A9x...`).
 8. Pronto! Agora acesse `admin.html` no navegador e faça login com esses dados.
 
 ---
 
-## 🔑 4. Como o Proprietário Utiliza o Sistema
+## 🔑 5. Como o Proprietário Utiliza o Sistema
 
 ### Para Fazer Login:
 1. Acesse `seusite.com/admin.html` (ou clique em *"Área do Dono"* no topo do cardápio).

@@ -6,6 +6,9 @@ import {
   assinarConfiguracoes, 
   assinarCategorias, 
   assinarProdutos, 
+  assinarPedidoPublico,
+  atualizarPedidoRecente,
+  obterPedidosRecentes,
   buscarClientePorTelefone,
   verificarEExecutarSeed,
   conexaoValida 
@@ -24,6 +27,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentConfig = CONFIG_PADRAO;
   let currentCategorias = [];
   let currentProdutos = [];
+
+  configurarBannerAcompanhamento();
 
   // 1. Executa seed de inicialização
   await verificarEExecutarSeed();
@@ -51,6 +56,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 5. Configuração dos Eventos da UI (Carrinho, Modais, Cadastro)
   configurarEventosUI();
+
+  function configurarBannerAcompanhamento() {
+    const recentes = obterPedidosRecentes();
+    if (!recentes.length) return;
+
+    const banner = document.createElement('a');
+    banner.id = 'acompanhamento-banner';
+    banner.className = 'acompanhamento-banner';
+    banner.hidden = true;
+    document.body.append(banner);
+
+    const pedidosAtivos = new Map();
+    const atualizarBanner = () => {
+      const ativo = recentes.find((item) => {
+        const pedido = pedidosAtivos.get(item.id);
+        return pedido && !['Entregue', 'Retirado', 'Cancelado'].includes(pedido.status);
+      });
+      if (!ativo) {
+        banner.hidden = true;
+        return;
+      }
+      const pedido = pedidosAtivos.get(ativo.id);
+      banner.href = `acompanhar.html?pedido=${encodeURIComponent(ativo.id)}`;
+      banner.textContent = `Acompanhar pedido #${pedido.numero || ativo.numero} · ${pedido.status || 'Recebido'}`;
+      banner.hidden = false;
+      atualizarPedidoRecente(pedido);
+    };
+
+    recentes.forEach((recente) => {
+      const unsubscribe = assinarPedidoPublico(recente.id, (pedido) => {
+        if (pedido) pedidosAtivos.set(recente.id, pedido);
+        atualizarBanner();
+      });
+      window.addEventListener('pagehide', unsubscribe, { once: true });
+    });
+  }
 
   function atualizarCabecalhoETextos(config) {
     const elNome = document.getElementById('loja-nome');

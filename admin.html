@@ -368,6 +368,26 @@
           </form>
         </div>
 
+        <div class="admin-secao-card whatsapp-modelos-section">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">📲 Mensagens do WhatsApp</h2>
+            <button type="button" id="btn-resetar-modelos-whatsapp" class="btn-nav-site">Restaurar modelos padrão</button>
+          </div>
+          <p>Escolha quais mudanças abrem o aviso de envio e edite os textos usados pelo botão do pedido.</p>
+          <fieldset class="whatsapp-auto-statuses">
+            <legend>Oferecer aviso automaticamente ao mudar para:</legend>
+            <div id="whatsapp-auto-status-list" class="whatsapp-auto-status-list"></div>
+          </fieldset>
+          <div class="whatsapp-variables" aria-label="Inserir variável no modelo selecionado">
+            <strong>Variáveis disponíveis:</strong>
+            <div id="whatsapp-variable-list" class="whatsapp-variable-list"></div>
+          </div>
+          <form id="form-modelos-whatsapp">
+            <div id="whatsapp-template-list" class="whatsapp-template-list"></div>
+            <button type="submit" class="btn-adicionar">💾 Salvar mensagens e avisos automáticos</button>
+          </form>
+        </div>
+
         <!-- Seletor de Cores da Paleta -->
         <div class="admin-secao-card">
           <div class="admin-secao-header">
@@ -637,6 +657,23 @@
       </form>
     </div>
   </div>
+
+  <dialog id="modal-aviso-whatsapp" class="whatsapp-dialog" aria-labelledby="modal-aviso-whatsapp-titulo" aria-describedby="modal-aviso-whatsapp-descricao">
+    <form method="dialog" class="whatsapp-dialog-content">
+      <h2 id="modal-aviso-whatsapp-titulo">Status atualizado! Deseja avisar o cliente?</h2>
+      <p id="modal-aviso-whatsapp-descricao"></p>
+      <label for="whatsapp-mensagem-pedido">Mensagem deste pedido</label>
+      <textarea id="whatsapp-mensagem-pedido" rows="7" maxlength="2000"></textarea>
+      <p id="whatsapp-aviso-erro" class="whatsapp-aviso-erro" role="status" aria-live="polite"></p>
+      <a id="whatsapp-link-fallback" class="whatsapp-link-fallback" target="_blank" rel="noopener noreferrer" hidden>Abrir WhatsApp pelo link</a>
+      <p id="whatsapp-confirmacao-texto" class="whatsapp-confirmacao-texto" hidden>O WhatsApp foi aberto com a mensagem preenchida. Depois de tocar em Enviar no WhatsApp, confirme aqui para registrar o aviso.</p>
+      <div class="whatsapp-dialog-actions">
+        <button type="button" id="btn-enviar-aviso-whatsapp" class="btn-enviar-aviso-whatsapp">📲 Enviar no WhatsApp</button>
+        <button type="button" id="btn-marcar-aviso-enviado" class="btn-marcar-aviso-enviado" hidden>✅ Marcar cliente avisado</button>
+        <button type="button" id="btn-fechar-aviso-whatsapp" class="btn-fechar-aviso-whatsapp">Agora não</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Container de Toasts -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>

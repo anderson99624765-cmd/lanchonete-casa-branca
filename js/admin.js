@@ -13,6 +13,8 @@ import {
   excluirProduto,
   assinarPedidos,
   atualizarStatusPedido,
+  salvarEstimativaPedido,
+  registrarNotificacaoPedido,
   assinarClientes,
   verificarEExecutarSeed,
   conexaoValida 
@@ -39,6 +41,15 @@ import {
   aplicarCoresCss, 
   limparTelefone 
 } from "./modules/utils.js";
+import {
+  MODELOS_WHATSAPP_PADRAO,
+  STATUS_WHATSAPP,
+  STATUS_WHATSAPP_AUTOMATICOS_PADRAO,
+  construirMensagemWhatsApp,
+  criarLinkWhatsApp,
+  normalizarTelefoneWhatsApp,
+  obterExemploMensagem
+} from "./notificacoes.js";
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Inicializando Painel Administrativo com Camada de Segurança...");
@@ -61,6 +72,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   let totalPedidosAnterior = null;
   let usuarioAutenticado = null;
   let listenersAtivos = [];
+  let pedidoAvisoAtual = null;
+  let elementoFocoAviso = null;
+  let textareaModeloAtiva = null;
 
   // ========================================================================
   // 1. FLUXO DE AUTENTICAÇÃO E CONTROLE DE ACESSO
@@ -391,6 +405,71 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ------------------------------------------------------------------------
   // SEÇÃO 1: CONFIGURAÇÕES GERAIS, LOJA E CORES
   // ------------------------------------------------------------------------
+  function renderizarEditorMensagensWhatsapp(cfg) {
+    const listaStatus = document.getElementById('whatsapp-auto-status-list');
+    const listaModelos = document.getElementById('whatsapp-template-list');
+    const listaVariaveis = document.getElementById('whatsapp-variable-list');
+    if (!listaStatus || !listaModelos || !listaVariaveis) return;
+
+    const automaticos = Array.isArray(cfg.statusWhatsappAutomaticos)
+      ? cfg.statusWhatsappAutomaticos
+      : STATUS_WHATSAPP_AUTOMATICOS_PADRAO;
+    listaStatus.replaceChildren();
+    STATUS_WHATSAPP.forEach((status, indice) => {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = status;
+      checkbox.dataset.statusAuto = 'true';
+      checkbox.checked = automaticos.includes(status);
+      label.append(checkbox, document.createTextNode(status));
+      listaStatus.append(label);
+    });
+
+    listaModelos.replaceChildren();
+    STATUS_WHATSAPP.forEach((status, indice) => {
+      const grupo = document.createElement('div');
+      grupo.className = 'whatsapp-template-item';
+      const label = document.createElement('label');
+      const textarea = document.createElement('textarea');
+      const preview = document.createElement('div');
+      const id = `whatsapp-template-${indice}`;
+      label.htmlFor = id;
+      label.textContent = status;
+      textarea.id = id;
+      textarea.dataset.statusModelo = status;
+      textarea.rows = 3;
+      const modelo = cfg.mensagensWhatsapp?.[status];
+      textarea.value = typeof modelo === 'string' ? modelo : MODELOS_WHATSAPP_PADRAO[status];
+      preview.className = 'whatsapp-template-preview';
+      preview.setAttribute('aria-label', `Pré-visualização da mensagem ${status}`);
+      const atualizarPreview = () => {
+        preview.textContent = obterExemploMensagem(status, textarea.value);
+      };
+      textarea.addEventListener('focus', () => { textareaModeloAtiva = textarea; });
+      textarea.addEventListener('input', atualizarPreview);
+      atualizarPreview();
+      grupo.append(label, textarea, preview);
+      listaModelos.append(grupo);
+    });
+
+    listaVariaveis.replaceChildren();
+    ['{nome}', '{numero_pedido}', '{itens}', '{total}', '{tipo}', '{endereco}', '{previsao}', '{link_acompanhamento}', '{nome_lanchonete}', '{motivo}'].forEach((variavel) => {
+      const botao = document.createElement('button');
+      botao.type = 'button';
+      botao.textContent = variavel;
+      botao.setAttribute('aria-label', `Inserir variável ${variavel}`);
+      botao.addEventListener('click', () => {
+        const textarea = textareaModeloAtiva || listaModelos.querySelector('textarea');
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setRangeText(variavel, textarea.selectionStart, textarea.selectionEnd, 'end');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      listaVariaveis.append(botao);
+    });
+  }
+
   function preencherFormConfig(cfg) {
     const elAberto = document.getElementById('cfg-loja-aberto-texto');
     const elIndicador = document.getElementById('cfg-loja-indicador');
@@ -443,6 +522,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (inputCor) inputCor.value = cores[chave];
       if (hexSpan) hexSpan.textContent = cores[chave];
     }
+
+    renderizarEditorMensagensWhatsapp(cfg);
   }
 
   function configurarAcoesGerais() {
@@ -490,6 +571,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       };
     }
+
+    const formModelosWhatsapp = document.getElementById('form-modelos-whatsapp');
+    if (formModelosWhatsapp) {
+      formModelosWhatsapp.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const mensagensWhatsapp = {};
+        document.querySelectorAll('[data-status-modelo]').forEach((textarea) => {
+          mensagensWhatsapp[textarea.dataset.statusModelo] = textarea.value.trim();
+        });
+        const statusWhatsappAutomaticos = [...document.querySelectorAll('[data-status-auto]:checked')]
+          .map((checkbox) => checkbox.value);
+        try {
+          await salvarConfiguracoes({ mensagensWhatsapp, statusWhatsappAutomaticos });
+          currentConfig = { ...currentConfig, mensagensWhatsapp, statusWhatsappAutomaticos };
+          preencherFormConfig(currentConfig);
+          mostrarToast('Modelos e avisos automáticos salvos no banco.', 'sucesso');
+        } catch (error) {
+          console.error('Erro ao salvar os modelos do WhatsApp:', error);
+          mostrarToast('Não foi possível salvar. Verifique a conexão e a permissão de administrador.', 'erro', 6000);
+        }
+      });
+    }
+
+    const btnRestaurarModelos = document.getElementById('btn-resetar-modelos-whatsapp');
+    if (btnRestaurarModelos) {
+      btnRestaurarModelos.addEventListener('click', async () => {
+        try {
+          const statusWhatsappAutomaticos = [...STATUS_WHATSAPP_AUTOMATICOS_PADRAO];
+          await salvarConfiguracoes({
+            mensagensWhatsapp: { ...MODELOS_WHATSAPP_PADRAO },
+            statusWhatsappAutomaticos
+          });
+          currentConfig = {
+            ...currentConfig,
+            mensagensWhatsapp: { ...MODELOS_WHATSAPP_PADRAO },
+            statusWhatsappAutomaticos
+          };
+          preencherFormConfig(currentConfig);
+          mostrarToast('Modelos padrão restaurados e salvos.', 'sucesso');
+        } catch (error) {
+          console.error('Erro ao restaurar modelos:', error);
+          mostrarToast('Não foi possível restaurar os modelos.', 'erro');
+        }
+      });
+    }
+
+    configurarDialogoAvisoWhatsApp();
 
     // Formulário de Cores
     const formCores = document.getElementById('form-config-cores');
@@ -543,6 +671,110 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     configurarModais();
+  }
+
+  function configurarDialogoAvisoWhatsApp() {
+    const dialog = document.getElementById('modal-aviso-whatsapp');
+    const botaoEnviar = document.getElementById('btn-enviar-aviso-whatsapp');
+    const botaoConfirmar = document.getElementById('btn-marcar-aviso-enviado');
+    const botaoFechar = document.getElementById('btn-fechar-aviso-whatsapp');
+    const campoMensagem = document.getElementById('whatsapp-mensagem-pedido');
+    const fallback = document.getElementById('whatsapp-link-fallback');
+    if (!dialog || !botaoEnviar || !botaoConfirmar || !botaoFechar || !campoMensagem) return;
+
+    botaoEnviar.addEventListener('click', async () => {
+      if (!pedidoAvisoAtual) return;
+      const link = criarLinkWhatsApp(pedidoAvisoAtual.cliente?.telefone, campoMensagem.value);
+      if (!link) {
+        document.getElementById('whatsapp-aviso-erro').textContent = 'Telefone ausente ou inválido. Informe um celular com DDD e 9 dígitos antes de avisar.';
+        return;
+      }
+
+      let janelaWhatsApp = null;
+      try {
+        janelaWhatsApp = window.open(link, '_blank');
+        if (janelaWhatsApp) janelaWhatsApp.opener = null;
+      } catch (error) {
+        console.warn('O navegador bloqueou a abertura automática do WhatsApp:', error);
+      }
+      fallback.href = link;
+      fallback.hidden = Boolean(janelaWhatsApp);
+      document.getElementById('whatsapp-aviso-erro').textContent = janelaWhatsApp
+        ? ''
+        : 'O navegador bloqueou a nova aba. Use o link abaixo para abrir o WhatsApp.';
+
+      botaoEnviar.disabled = true;
+      try {
+        const registro = await registrarNotificacaoPedido(pedidoAvisoAtual.id, pedidoAvisoAtual.status, false);
+        pedidoAvisoAtual.notificacoes = pedidoAvisoAtual.notificacoes || {};
+        pedidoAvisoAtual.notificacoes[registro.id] = registro;
+        renderizarPedidos();
+        botaoEnviar.hidden = true;
+        document.getElementById('whatsapp-confirmacao-texto').hidden = false;
+        botaoConfirmar.hidden = false;
+        mostrarToast('WhatsApp aberto. Após tocar em Enviar, confirme aqui para registrar o aviso.', 'info', 6000);
+      } catch (error) {
+        console.error('Erro ao registrar a tentativa de aviso:', error);
+        document.getElementById('whatsapp-aviso-erro').textContent = 'A mensagem abriu, mas o registro não foi salvo. Verifique sua conexão e tente novamente.';
+      } finally {
+        botaoEnviar.disabled = false;
+      }
+    });
+
+    botaoConfirmar.addEventListener('click', async () => {
+      if (!pedidoAvisoAtual) return;
+      botaoConfirmar.disabled = true;
+      try {
+        const registro = await registrarNotificacaoPedido(pedidoAvisoAtual.id, pedidoAvisoAtual.status, true);
+        pedidoAvisoAtual.notificacoes = pedidoAvisoAtual.notificacoes || {};
+        pedidoAvisoAtual.notificacoes[registro.id] = registro;
+        renderizarPedidos();
+        dialog.close('enviado');
+        mostrarToast('Aviso registrado como enviado ao cliente.', 'sucesso');
+      } catch (error) {
+        console.error('Erro ao confirmar o aviso:', error);
+        mostrarToast('Não foi possível registrar o aviso no banco.', 'erro');
+      } finally {
+        botaoConfirmar.disabled = false;
+      }
+    });
+
+    botaoFechar.addEventListener('click', () => dialog.close('agora-nao'));
+    dialog.addEventListener('close', () => {
+      const pedidoId = pedidoAvisoAtual?.id;
+      pedidoAvisoAtual = null;
+      if (elementoFocoAviso?.isConnected) elementoFocoAviso.focus();
+      else if (pedidoId) document.querySelector(`.pedido-card[data-id="${pedidoId}"]`)?.focus();
+      elementoFocoAviso = null;
+    });
+  }
+
+  function abrirDialogoAvisoPedido(pedidoId) {
+    const pedido = currentPedidos.find((item) => item.id === pedidoId);
+    const dialog = document.getElementById('modal-aviso-whatsapp');
+    if (!pedido || !dialog) return;
+
+    pedidoAvisoAtual = pedido;
+    elementoFocoAviso = document.activeElement;
+    const telefoneValido = Boolean(normalizarTelefoneWhatsApp(pedido.cliente?.telefone));
+    const modelo = currentConfig.mensagensWhatsapp?.[pedido.status]
+      || MODELOS_WHATSAPP_PADRAO[pedido.status]
+      || MODELOS_WHATSAPP_PADRAO.Recebido;
+    document.getElementById('modal-aviso-whatsapp-descricao').textContent = `Pedido #${pedido.numero || '—'} · ${pedido.status}`;
+    document.getElementById('whatsapp-aviso-erro').textContent = telefoneValido
+      ? ''
+      : 'Telefone ausente ou inválido. É necessário um celular brasileiro com DDD e 9 dígitos.';
+    document.getElementById('whatsapp-confirmacao-texto').hidden = true;
+    document.getElementById('btn-enviar-aviso-whatsapp').hidden = false;
+    document.getElementById('btn-enviar-aviso-whatsapp').disabled = !telefoneValido;
+    document.getElementById('btn-marcar-aviso-enviado').hidden = true;
+    document.getElementById('btn-fechar-aviso-whatsapp').textContent = 'Agora não';
+    const fallback = document.getElementById('whatsapp-link-fallback');
+    fallback.hidden = true;
+    fallback.removeAttribute('href');
+    document.getElementById('whatsapp-mensagem-pedido').value = construirMensagemWhatsApp(pedido, modelo, currentConfig);
+    if (!dialog.open) dialog.showModal();
+    document.getElementById('whatsapp-mensagem-pedido').focus();
   }
 
   // ------------------------------------------------------------------------
@@ -660,7 +892,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const badgeNovos = document.getElementById('badge-pedidos-novos-count');
     if (!container) return;
 
-    const pedidosNovos = currentPedidos.filter(p => p.status === 'Novo');
+    const pedidosNovos = currentPedidos.filter(p => p.status === 'Recebido' || p.status === 'Novo');
+    console.log("[Pedidos] Lista filtrada no admin (status Recebido):", pedidosNovos);
     if (badgeNovos) {
       badgeNovos.textContent = pedidosNovos.length;
       badgeNovos.style.display = pedidosNovos.length > 0 ? 'inline-block' : 'none';
@@ -678,12 +911,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     container.innerHTML = currentPedidos.map(pedido => {
+      const statusAtual = pedido.status === 'Novo' ? 'Recebido' : pedido.status;
+      const etapas = pedido.tipo === 'retirada'
+        ? ['Recebido', 'Em preparo', 'Pronto para retirada', 'Retirado']
+        : ['Recebido', 'Em preparo', 'Saiu para entrega', 'Entregue'];
+      const etapaAtual = etapas.indexOf(statusAtual);
+      const proximaEtapa = etapaAtual >= 0 ? etapas[etapaAtual + 1] : null;
       const dataFormatada = pedido.criadoEm ? new Date(pedido.criadoEm).toLocaleString('pt-BR') : 'Data não informada';
-      const statusClass = (pedido.status || 'Novo').replace(/\s+/g, '-');
-      const telClienteLimpo = limparTelefone(pedido.cliente?.telefone || '');
+      const statusClass = (statusAtual || 'Recebido').replace(/\s+/g, '-');
+      const notificacoes = Object.values(pedido.notificacoes || {}).sort((a, b) => new Date(a.dataHora || 0) - new Date(b.dataHora || 0));
+      const ultimoAviso = notificacoes.at(-1);
+      const avisoAtualEnviado = Boolean(ultimoAviso?.enviado && ultimoAviso.status === statusAtual);
+      const avisoData = avisoAtualEnviado ? new Date(ultimoAviso.dataHora).toLocaleString('pt-BR') : '';
 
       return `
-        <div class="pedido-card status-${statusClass}" data-id="${pedido.id}">
+        <div class="pedido-card status-${statusClass}" data-id="${pedido.id}" tabindex="-1">
           <div class="pedido-card-header">
             <span class="pedido-numero">Pedido #${pedido.numero || pedido.id.substring(0, 5)}</span>
             <span class="pedido-hora">${dataFormatada}</span>
@@ -712,23 +954,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span>${formatarMoeda(pedido.total)}</span>
           </div>
 
-          <div class="pedido-status-controle" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.4rem;">
-            <label style="font-size:0.8rem; font-weight:800;">Status do Pedido:</label>
-            <select class="form-select" onchange="window.adminService.mudarStatusPedido('${pedido.id}', this.value)" style="font-weight:700;">
-              <option value="Novo" ${pedido.status === 'Novo' ? 'selected' : ''}>🟡 Novo</option>
-              <option value="Em preparo" ${pedido.status === 'Em preparo' ? 'selected' : ''}>🔵 Em preparo</option>
-              <option value="Saiu para entrega" ${pedido.status === 'Saiu para entrega' ? 'selected' : ''}>🟣 Saiu para entrega / Pronto</option>
-              <option value="Entregue" ${pedido.status === 'Entregue' ? 'selected' : ''}>🟢 Entregue / Finalizado</option>
-              <option value="Cancelado" ${pedido.status === 'Cancelado' ? 'selected' : ''}>🔴 Cancelado</option>
-            </select>
+          <div class="pedido-status-controle">
+            <strong>Status: ${sanitizarTexto(statusAtual)}</strong>
+            ${proximaEtapa ? `<button class="admin-pedido-proxima-etapa" onclick="window.adminService.mudarStatusPedido('${pedido.id}', '${proximaEtapa}')">Marcar como ${sanitizarTexto(proximaEtapa)}</button>` : ''}
+            ${statusAtual !== 'Cancelado' && !['Entregue', 'Retirado'].includes(statusAtual) ? `<button class="admin-pedido-cancelar" onclick="window.adminService.mudarStatusPedido('${pedido.id}', 'Cancelado')">Cancelar pedido</button>` : ''}
+            ${pedido.motivoCancelamento ? `<small>Motivo do cancelamento: ${sanitizarTexto(pedido.motivoCancelamento)}</small>` : ''}
+            <label for="estimativa-${pedido.id}">Previsão para o cliente</label>
+            <div class="admin-pedido-estimativa">
+              <input id="estimativa-${pedido.id}" class="form-input" value="${sanitizarTexto(pedido.estimativa || '')}" placeholder="Ex.: 30 a 40 min" maxlength="60">
+              <button class="btn-adicionar" onclick="window.adminService.salvarEstimativaPedido('${pedido.id}')">Salvar previsão</button>
+            </div>
           </div>
 
           <div class="pedido-acoes">
-            ${telClienteLimpo ? `
-              <a href="https://wa.me/55${telClienteLimpo}?text=Ol%C3%A1%20${encodeURIComponent(pedido.cliente?.nome || '')}!%20Estamos%20entrando%20em%20contato%20sobre%20o%20seu%20pedido%20%23${pedido.numero}%20na%20Lanchonete%20Casa%20Branca." target="_blank" class="btn-chamar-whats">
-                💬 Conversar no WhatsApp
-              </a>
-            ` : ''}
+            <small class="pedido-aviso-estado ${avisoAtualEnviado ? 'enviado' : 'pendente'}">${avisoAtualEnviado ? `✅ Cliente avisado em ${sanitizarTexto(avisoData)}` : '⚠ Cliente não avisado'}</small>
+            <button type="button" class="btn-chamar-whats" onclick="window.adminService.prepararAvisoPedido('${pedido.id}')" aria-label="Editar e enviar mensagem do pedido ${pedido.numero || ''} no WhatsApp">
+              📲 Avisar cliente no WhatsApp
+            </button>
           </div>
         </div>
       `;
@@ -1036,13 +1278,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
 
     mudarStatusPedido: async (id, novoStatus) => {
+      let opcoes = {};
+      if (novoStatus === 'Cancelado') {
+        const motivo = prompt('Informe o motivo do cancelamento (opcional):');
+        if (motivo === null) return;
+        if (!confirm('Confirma o cancelamento deste pedido?')) return;
+        if (motivo.trim()) opcoes.motivoCancelamento = motivo.trim();
+      }
+
       try {
-        await atualizarStatusPedido(id, novoStatus);
+        await atualizarStatusPedido(id, novoStatus, opcoes);
+        const pedido = currentPedidos.find((item) => item.id === id);
+        if (pedido) {
+          const dataHora = new Date().toISOString();
+          pedido.status = novoStatus;
+          pedido.atualizadoEm = dataHora;
+          if (opcoes.motivoCancelamento) pedido.motivoCancelamento = opcoes.motivoCancelamento;
+          pedido.historico = pedido.historico || {};
+          pedido.historico[`evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`] = {
+            status: novoStatus,
+            dataHora,
+            ...(opcoes.motivoCancelamento ? { motivo: opcoes.motivoCancelamento } : {})
+          };
+          renderizarPedidos();
+          const avisosAutomaticos = Array.isArray(currentConfig.statusWhatsappAutomaticos)
+            ? currentConfig.statusWhatsappAutomaticos
+            : STATUS_WHATSAPP_AUTOMATICOS_PADRAO;
+          if (avisosAutomaticos.includes(novoStatus)) abrirDialogoAvisoPedido(id);
+        }
         mostrarToast(`Status do pedido atualizado para "${novoStatus}"!`, 'sucesso');
       } catch (e) {
         console.error("Erro ao atualizar status do pedido:", e);
-        mostrarToast('Erro ao atualizar status do pedido.', 'erro');
+        mostrarToast(e.code === 'PERMISSION_DENIED' ? 'Sem permissão para atualizar este pedido. Verifique a autenticação e as regras do Firebase.' : 'Erro ao atualizar status do pedido. Tente novamente.', 'erro', 6000);
       }
+    },
+
+    salvarEstimativaPedido: async (id) => {
+      const estimativa = document.getElementById(`estimativa-${id}`)?.value.trim() || '';
+      try {
+        await salvarEstimativaPedido(id, estimativa);
+        const pedido = currentPedidos.find((item) => item.id === id);
+        if (pedido) {
+          pedido.estimativa = estimativa;
+          renderizarPedidos();
+        }
+        mostrarToast('Previsão do pedido atualizada.', 'sucesso');
+      } catch (e) {
+        console.error('Erro ao salvar previsão do pedido:', e);
+        mostrarToast('Não foi possível salvar a previsão. Verifique sua conexão e tente novamente.', 'erro');
+      }
+    },
+
+    prepararAvisoPedido: (id) => {
+      abrirDialogoAvisoPedido(id);
     }
   };
 });
