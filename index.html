@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Lanchonete Casa Branca | O sabor que faz você se sentir em casa</title>
+  <meta name="description" content="Lanchonete Casa Branca - Delivery e retirada de lanches e salgados quentinhos na Praça da quadra. Peça online de forma rápida e prática!">
+  <meta name="theme-color" content="#7A1F12">
+
+  <!-- Favicon SVG aconchegante -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path fill='%237A1F12' d='M32 6L6 26h8v32h36V26h8z'/><path fill='%23F7E3B5' d='M24 34h16v18H24z'/><path fill='%23F5C531' d='M44 14h6v10h-6z'/></svg>">
+
+  <!-- Estilos Globais -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ======================================================================
+       CABEÇALHO DA LANCHONETE
+       ====================================================================== -->
+  <header class="header-topo">
+    <div class="header-container">
+      
+      <!-- Barra Superior: Selo de Aberto/Fechado e Acesso Admin -->
+      <div class="header-meta-bar">
+        <div id="selo-status-loja" class="selo-status-loja aberto" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="selo-status-texto">Aberto agora</span>
+        </div>
+
+        <a href="admin.html" class="link-admin-topo" title="Acessar o Painel do Administrador">
+          🔒 Área do Dono
+        </a>
+      </div>
+
+      <!-- Logotipo Oficial da Casinha com Chaminé e Fumaça (SVG Vetorial) -->
+      <div class="brand-identity">
+        <svg class="logo-casa-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Chaminé com fumaça sutil -->
+          <rect x="66" y="24" width="12" height="24" rx="2" fill="#5A140B" stroke="#F5C531" stroke-width="1.5"/>
+          <path d="M72 18C70 14 74 12 71 8" stroke="#F7E3B5" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="2 3"/>
+          <path d="M76 19C74 15 78 13 75 9" stroke="#FFF3DC" stroke-width="2" stroke-linecap="round"/>
+          
+          <!-- Telhado aconchegante -->
+          <path d="M50 12L12 44H88L50 12Z" fill="#7A1F12" stroke="#F5C531" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M50 17L18 43H82L50 17Z" fill="#8E2618"/>
+          
+          <!-- Paredes da casinha -->
+          <rect x="20" y="43" width="60" height="45" rx="3" fill="#FFF3DC" stroke="#5A140B" stroke-width="2.5"/>
+          
+          <!-- Porta amadeirada -->
+          <rect x="42" y="58" width="16" height="30" rx="3" fill="#7A1F12" stroke="#5A140B" stroke-width="1.5"/>
+          <circle cx="53" cy="74" r="1.5" fill="#F5C531"/>
+
+          <!-- Janela com cortininha aconchegante -->
+          <rect x="25" y="52" width="13" height="15" rx="2" fill="#F7E3B5" stroke="#7A1F12" stroke-width="1.5"/>
+          <line x1="31.5" y1="52" x2="31.5" y2="67" stroke="#7A1F12" stroke-width="1.5"/>
+          <line x1="25" y1="59.5" x2="38" y2="59.5" stroke="#7A1F12" stroke-width="1.5"/>
+
+          <rect x="62" y="52" width="13" height="15" rx="2" fill="#F7E3B5" stroke="#7A1F12" stroke-width="1.5"/>
+          <line x1="68.5" y1="52" x2="68.5" y2="67" stroke="#7A1F12" stroke-width="1.5"/>
+          <line x1="62" y1="59.5" x2="75" y2="59.5" stroke="#7A1F12" stroke-width="1.5"/>
+
+          <!-- Detalhe coração acolhedor no frontão -->
+          <path d="M50 34C48 31 44 32 44 35C44 38 50 41 50 41C50 41 56 38 56 35C56 32 52 31 50 34Z" fill="#F5C531"/>
+        </svg>
+
+        <span class="brand-pre-title">LANCHONETE</span>
+        <h1 class="brand-main-title" id="loja-nome">Casa Branca</h1>
+        <p class="brand-slogan" id="loja-slogan">"O sabor que faz você se sentir em casa."</p>
+      </div>
+
+      <!-- Pílulas Informativas de Localização e Pedido Rápido -->
+      <div class="info-badges-row">
+        <span class="info-pill" title="Localização">
+          📍 <span id="loja-local-texto">Praça da quadra</span>
+        </span>
+        <span class="info-pill" title="Modalidades de Atendimento">
+          🛵 Delivery & 🛍️ Retirada
+        </span>
+        <a id="loja-whats-link" href="https://wa.me/5574999177156" target="_blank" class="info-pill info-pill-link" title="Fale conosco no WhatsApp">
+          📱 <span id="loja-whats-texto">(74) 99917-7156</span>
+        </a>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Banner de Aviso Loja Fechada -->
+  <div id="aviso-loja-fechada" class="aviso-loja-fechada" role="alert">
+    Estamos fechados no momento. Você pode conferir nosso cardápio, mas pedidos estão temporariamente pausados.
+  </div>
+
+  <!-- ======================================================================
+       BARRA DE CATEGORIAS ROLÁVEL NA HORIZONTAL
+       ====================================================================== -->
+  <nav class="nav-categorias-sticky" aria-label="Categorias do Cardápio">
+    <div class="nav-categorias-wrapper">
+      <div class="nav-categorias-scroll" id="nav-categorias-lista">
+        <!-- Gerado dinamicamente com base no banco de dados -->
+        <button class="cat-chip ativo" data-cat-id="todas">🍽️ Ver Tudo</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Campo de Pesquisa no Cardápio -->
+  <div class="busca-container">
+    <div class="busca-input-wrapper">
+      <span class="busca-icone" aria-hidden="true">🔍</span>
+      <input 
+        type="search" 
+        id="busca-cardapio" 
+        class="busca-input" 
+        placeholder="Buscar coxinha, enroladinho, lanches..." 
+        aria-label="Buscar produtos no cardápio"
+      />
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       SEÇÃO DO CARDÁPIO PRINCIPAL
+       ====================================================================== -->
+  <main class="cardapio-secao" id="secao-cardapio">
+    <div id="grid-produtos">
+      <!-- Cards e blocos de produtos gerados dinamicamente via JS -->
+      <div class="cardapio-vazio">
+        <p>Carregando as delícias da Casa Branca...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ======================================================================
+       BOTÃO FLUTUANTE DA SACOLA / CARRINHO
+       ====================================================================== -->
+  <button id="cart-float-btn" class="cart-float-btn" aria-label="Abrir sacola de compras">
+    <div class="cart-float-esq">
+      <div class="cart-badge-icon">
+        🛒
+        <span class="badge-contador" id="cart-badge-count">0</span>
+      </div>
+      <span class="cart-float-texto">Ver Sacola</span>
+    </div>
+    <div class="cart-float-total" id="cart-badge-total">R$ 0,00</div>
+  </button>
+
+  <!-- ======================================================================
+       MODAL DE CARRINHO E CHECKOUT
+       ====================================================================== -->
+  <div class="modal-overlay" id="modal-carrinho" role="dialog" aria-modal="true" aria-labelledby="modal-carrinho-titulo">
+    <div class="modal-sheet">
+      
+      <!-- Cabeçalho do Modal -->
+      <header class="modal-header">
+        <h2 class="modal-titulo" id="modal-carrinho-titulo">Sua Sacola</h2>
+        <button type="button" class="btn-fechar-modal" id="btn-fechar-modal-carrinho" aria-label="Fechar sacola">&times;</button>
+      </header>
+
+      <!-- Corpo do Modal -->
+      <div class="modal-body">
+        
+        <!-- Seletor: Entrega vs Retirada -->
+        <div>
+          <label class="form-label">Como deseja receber seu pedido?</label>
+          <div class="seletor-tipo-pedido">
+            <button type="button" id="btn-opt-entrega" class="btn-tipo-opcao ativo" data-tipo="entrega">
+              <span>🛵 Entrega em Casa</span>
+            </button>
+            <button type="button" id="btn-opt-retirada" class="btn-tipo-opcao" data-tipo="retirada">
+              <span>🛍️ Retirar no Local</span>
+              <small style="font-size: 0.75rem; font-weight: normal;">(Praça da quadra)</small>
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista dos Itens Selecionados -->
+        <div id="cart-items-container" class="cart-items-container">
+          <!-- Gerado dinamicamente via carrinho.js -->
+        </div>
+
+        <!-- Seção: Identificação e Cadastro do Cliente -->
+        <section class="secao-form-cliente" aria-labelledby="titulo-dados-cliente">
+          <div class="secao-form-titulo">
+            <span id="titulo-dados-cliente">👤 Seus Dados</span>
+            <span id="badge-cliente-reconhecido" class="badge-cliente-reconhecido">Cliente Reconhecido!</span>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="cli-telefone" class="form-label">Telefone / WhatsApp *</label>
+              <input 
+                type="tel" 
+                id="cli-telefone" 
+                class="form-input" 
+                placeholder="(74) 99999-9999" 
+                maxlength="15"
+                required
+              />
+              <small style="font-size:0.75rem; color:var(--text-muted);">
+                💡 Digite seu telefone para preenchimento automático.
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="cli-nome" class="form-label">Seu Nome Completo *</label>
+              <input 
+                type="text" 
+                id="cli-nome" 
+                class="form-input" 
+                placeholder="Ex: Maria da Silva" 
+                required
+              />
+            </div>
+
+            <!-- Grupo de Endereço (Oculto se for Retirada) -->
+            <div id="grupo-endereco" style="display: block;">
+              <div class="form-group" style="margin-bottom: 0.65rem;">
+                <label for="cli-endereco" class="form-label">Endereço de Entrega (Rua, Número, Bairro) *</label>
+                <input 
+                  type="text" 
+                  id="cli-endereco" 
+                  class="form-input" 
+                  placeholder="Ex: Rua das Flores, 120"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="cli-referencia" class="form-label">Ponto de Referência</label>
+                <input 
+                  type="text" 
+                  id="cli-referencia" 
+                  class="form-input" 
+                  placeholder="Ex: Próximo ao mercado do Zé / portão branco" 
+                />
+              </div>
+            </div>
+
+            <!-- Observações Gerais do Pedido -->
+            <div class="form-group">
+              <label for="cart-obs-geral" class="form-label">Observações Gerais para a Cozinha</label>
+              <textarea 
+                id="cart-obs-geral" 
+                class="form-textarea" 
+                rows="2" 
+                placeholder="Ex: Caprichar no guardanapo, enviar molho verde..."
+              ></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- Seção: Forma de Pagamento -->
+        <section class="secao-pagamento" aria-labelledby="titulo-pagamento">
+          <label id="titulo-pagamento" class="form-label">Forma de Pagamento</label>
+          <div class="grid-pagamento-opcoes">
+            <button type="button" class="btn-pag-opcao ativo" data-pag="pix">
+              💠 Pix
+            </button>
+            <button type="button" class="btn-pag-opcao" data-pag="dinheiro">
+              💵 Dinheiro
+            </button>
+            <button type="button" class="btn-pag-opcao" data-pag="cartao">
+              💳 Cartão
+            </button>
+          </div>
+
+          <div id="bloco-troco" class="troco-wrapper">
+            <label for="pag-troco-valor" class="form-label">Troco para quanto?</label>
+            <input 
+              type="text" 
+              id="pag-troco-valor" 
+              class="form-input" 
+              placeholder="Ex: 50,00 (ou deixe em branco se não precisar)" 
+            />
+          </div>
+        </section>
+
+        <!-- Resumo Financeiro -->
+        <div class="resumo-valores-bloco">
+          <div class="resumo-linha">
+            <span>Subtotal:</span>
+            <span id="cart-subtotal">R$ 0,00</span>
+          </div>
+          <div class="resumo-linha">
+            <span>Taxa de Entrega:</span>
+            <span id="cart-taxa">R$ 0,00</span>
+          </div>
+          <div class="resumo-linha total">
+            <span>Total a Pagar:</span>
+            <span id="cart-total">R$ 0,00</span>
+          </div>
+
+          <!-- Aviso de Pedido Mínimo -->
+          <div id="cart-minimo-aviso" class="aviso-minimo-alerta">
+            ⚠️ O pedido mínimo para entrega é de R$ 0,00.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Rodapé do Modal com Botão Finalizar -->
+      <footer class="modal-footer">
+        <button type="button" id="btn-finalizar-pedido" class="btn-finalizar-pedido" disabled>
+          <span>📲 Confirmar e Enviar Pedido</span>
+        </button>
+      </footer>
+
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       RODAPÉ INFORMATIVO
+       ====================================================================== -->
+  <footer class="footer-site">
+    <div class="footer-container">
+      <div class="footer-logo">Lanchonete Casa Branca</div>
+      <p class="footer-slogan">"O sabor que faz você se sentir em casa."</p>
+      <p class="footer-detalhes">
+        📍 Praça da quadra<br>
+        🛵 Delivery rápido & 🛍️ Retirada no balcão<br>
+        WhatsApp Oficial: (74) 99917-7156
+      </p>
+      <p class="footer-copyright">
+        © 2026 Lanchonete Casa Branca. Todos os direitos reservados.
+      </p>
+    </div>
+  </footer>
+
+  <!-- Container de Toasts de Notificação -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Scripts Modulares -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

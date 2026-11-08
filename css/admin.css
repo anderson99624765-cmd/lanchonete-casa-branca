@@ -1,0 +1,731 @@
+/* ==========================================================================
+   Lanchonete Casa Branca - Estilos Exclusivos do Painel Administrativo
+   ========================================================================== */
+
+.admin-body {
+  background-color: #F4EFE6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   TELA DE LOGIN REFINADA E PROFISSIONAL
+   ========================================================================== */
+.login-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+
+.login-card {
+  background-color: #fff;
+  width: 100%;
+  max-width: 440px;
+  border-radius: var(--radius-lg);
+  padding: 2.2rem 2rem;
+  box-shadow: var(--shadow-lg);
+  border: 2px solid rgba(122, 31, 18, 0.15);
+  text-align: center;
+  animation: fadeInLogin 0.35s ease;
+}
+
+@keyframes fadeInLogin {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.login-logo {
+  width: 82px;
+  height: 82px;
+  margin: 0 auto 0.75rem;
+  filter: drop-shadow(0 4px 6px rgba(122, 31, 18, 0.15));
+}
+
+.login-pre-titulo {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--orange-terra);
+  font-weight: 800;
+  display: block;
+}
+
+.login-titulo {
+  font-family: var(--font-title);
+  font-size: 2.1rem;
+  color: var(--primary);
+  margin-bottom: 0.2rem;
+  line-height: 1.15;
+}
+
+.login-sub {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Grupo com botão de mostrar/ocultar senha */
+.input-senha-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.input-senha-wrapper .form-input {
+  padding-right: 2.8rem;
+}
+
+.btn-toggle-senha {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-toggle-senha:hover {
+  color: var(--primary);
+}
+
+/* Checkbox estilizado "Manter conectado" */
+.checkbox-lembrar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-lembrar input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* Links do Login */
+.login-links-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.link-esqueci-senha {
+  font-size: 0.84rem;
+  color: var(--primary);
+  font-weight: 800;
+  text-decoration: underline;
+  transition: var(--transition);
+}
+
+.link-esqueci-senha:hover {
+  color: var(--primary-dark);
+}
+
+/* Botão Entrar com Spinner de Carregamento */
+.btn-login-submit {
+  width: 100%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  padding: 0.9rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(122, 31, 18, 0.3);
+  margin-top: 0.5rem;
+}
+
+.btn-login-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, #3F0B05 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(122, 31, 18, 0.4);
+}
+
+.btn-login-submit:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.spinner-loading {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.75s infinite linear;
+  display: inline-block;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Indicador de Força de Senha */
+.forca-senha-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.forca-senha-barra {
+  height: 5px;
+  width: 100%;
+  background: #E0E0E0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.forca-senha-preenchimento {
+  height: 100%;
+  width: 0%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.forca-senha-preenchimento.fraca {
+  width: 33%;
+  background-color: var(--red-closed);
+}
+
+.forca-senha-preenchimento.media {
+  width: 66%;
+  background-color: var(--orange-terra);
+}
+
+.forca-senha-preenchimento.forte {
+  width: 100%;
+  background-color: var(--green-open);
+}
+
+.forca-senha-texto {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   TOPO DO PAINEL ADMIN
+   ========================================================================== */
+.admin-navbar {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #fff;
+  padding: 0.85rem 1.25rem;
+  box-shadow: var(--shadow-md);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.admin-navbar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+
+.admin-nav-brand svg {
+  width: 32px;
+  height: 32px;
+}
+
+.admin-nav-acoes {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-nav-site {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: var(--transition);
+}
+
+.btn-nav-site:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn-logout {
+  background: #C0392B;
+  color: #fff;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-logout:hover {
+  background: #962D22;
+}
+
+/* Abas de Navegação do Painel */
+.admin-tabs-nav {
+  background-color: #fff;
+  border-bottom: 2px solid rgba(122, 31, 18, 0.1);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 55px;
+  z-index: 90;
+}
+
+.admin-tabs-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.5rem 1rem 0;
+}
+
+.admin-tab-btn {
+  padding: 0.75rem 1.25rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: var(--transition);
+}
+
+.admin-tab-btn:hover {
+  color: var(--primary);
+}
+
+.admin-tab-btn.ativo {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background-color: var(--bg-cream);
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+}
+
+.admin-badge-count {
+  background-color: var(--orange-terra);
+  color: #fff;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-pill);
+}
+
+/* Conteúdo Principal */
+.admin-main {
+  max-width: 1200px;
+  margin: 1.5rem auto 4rem;
+  padding: 0 1rem;
+  width: 100%;
+}
+
+.admin-tab-content {
+  display: none;
+}
+
+.admin-tab-content.ativo {
+  display: block;
+}
+
+/* Seções e Cards do Painel */
+.admin-secao-card {
+  background-color: #fff;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid rgba(122, 31, 18, 0.12);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-secao-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(122, 31, 18, 0.1);
+}
+
+.admin-secao-titulo {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Interruptor Gigante ABERTO / FECHADO */
+.loja-switch-wrapper {
+  background: var(--bg-cream);
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(122, 31, 18, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+@media (min-width: 600px) {
+  .loja-switch-wrapper {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+  }
+}
+
+.loja-status-display {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.loja-status-indicador {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #ccc;
+}
+
+.loja-status-indicador.aberto {
+  background-color: var(--green-open);
+  box-shadow: 0 0 14px var(--green-open);
+}
+
+.loja-status-indicador.fechado {
+  background-color: var(--red-closed);
+  box-shadow: 0 0 14px var(--red-closed);
+}
+
+.loja-status-texto h3 {
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+.btn-toggle-loja {
+  padding: 0.9rem 1.8rem;
+  border-radius: var(--radius-pill);
+  font-weight: 900;
+  font-size: 1.05rem;
+  color: #fff;
+  transition: var(--transition);
+}
+
+.btn-toggle-loja.abrir {
+  background-color: var(--green-open);
+  box-shadow: 0 6px 16px rgba(94, 140, 58, 0.4);
+}
+
+.btn-toggle-loja.fechar {
+  background-color: var(--red-closed);
+  box-shadow: 0 6px 16px rgba(211, 47, 47, 0.4);
+}
+
+/* Seletor de Cores da Paleta */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.color-input-card {
+  background-color: #FAFAFA;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.color-picker-input {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+}
+
+.color-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.color-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.color-hex {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+/* Tabelas e Listas de Pedidos / Produtos / Categorias */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.admin-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-tabela th {
+  background-color: var(--bg-cream);
+  color: var(--primary-dark);
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0.85rem;
+  border-bottom: 2px solid rgba(122, 31, 18, 0.15);
+}
+
+.admin-tabela td {
+  padding: 0.85rem;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  font-size: 0.9rem;
+}
+
+.admin-tabela tr:hover {
+  background-color: #FFFDF9;
+}
+
+/* Tags de destaque e promoção */
+.tag-destaque {
+  font-size: 0.72rem;
+  background: var(--card-cream);
+  color: var(--primary-dark);
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  margin-left: 0.35rem;
+}
+
+.tag-promo {
+  font-size: 0.72rem;
+  background: #FDEDEC;
+  color: var(--red-closed);
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  margin-left: 0.35rem;
+}
+
+.badge-status {
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.badge-ativo {
+  background-color: #E8F5E9;
+  color: #2E7D32;
+}
+
+.badge-inativo {
+  background-color: #FFEBEE;
+  color: #C62828;
+}
+
+.btn-acao-tabela {
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: #fff;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-acao-tabela:hover {
+  background: var(--bg-cream);
+  border-color: var(--primary);
+}
+
+/* Cards de Pedidos para Tela Mobile */
+.pedidos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.pedido-card {
+  background-color: #fff;
+  border: 2px solid rgba(122, 31, 18, 0.15);
+  border-radius: var(--radius-md);
+  padding: 1.1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.pedido-card.status-Novo {
+  border-left: 6px solid #E67E22;
+  background: #FFFBF5;
+}
+
+.pedido-card.status-Em-preparo {
+  border-left: 6px solid #3498DB;
+}
+
+.pedido-card.status-Saiu-para-entrega {
+  border-left: 6px solid #9B59B6;
+}
+
+.pedido-card.status-Entregue {
+  border-left: 6px solid var(--green-open);
+}
+
+.pedido-card.status-Cancelado {
+  border-left: 6px solid var(--red-closed);
+  opacity: 0.7;
+}
+
+.pedido-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pedido-numero {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--primary);
+}
+
+.pedido-hora {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.pedido-cliente-bloco {
+  background-color: var(--bg-cream);
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+
+.pedido-itens-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  padding: 0.5rem 0;
+  border-top: 1px dashed rgba(0,0,0,0.1);
+  border-bottom: 1px dashed rgba(0,0,0,0.1);
+}
+
+.pedido-item-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.pedido-rodape-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 900;
+  font-size: 1.1rem;
+  color: var(--primary-dark);
+}
+
+.pedido-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.btn-chamar-whats {
+  background-color: #25D366;
+  color: #fff;
+  padding: 0.6rem;
+  border-radius: var(--radius-sm);
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.btn-chamar-whats:hover {
+  background-color: #1EBE5D;
+}
+
+/* Modais do Admin */
+.admin-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-modal-overlay.ativo {
+  display: flex;
+}
+
+.admin-modal-content {
+  background-color: #fff;
+  width: 100%;
+  max-width: 550px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-lg);
+}

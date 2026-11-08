@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "config": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == false || auth != null"
+    },
+    "categorias": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "produtos": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "clientes": {
+      ".read": "auth != null",
+      "$telefone": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "pedidos": {
+      ".read": "auth != null",
+      "$pedidoId": {
+        ".read": "auth != null",
+        ".write": true
+      }
+    }
+  }
+}

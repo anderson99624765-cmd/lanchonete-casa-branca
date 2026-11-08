@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Área do Proprietário | Lanchonete Casa Branca</title>
+  <meta name="theme-color" content="#7A1F12">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path fill='%237A1F12' d='M32 6L6 26h8v32h36V26h8z'/><path fill='%23F7E3B5' d='M24 34h16v18H24z'/><path fill='%23F5C531' d='M44 14h6v10h-6z'/></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-body">
+
+  <!-- ======================================================================
+       TELA 1: LOGIN EXCLUSIVO DO DONO / ADMINISTRADOR
+       Somente esta tela aparece antes da autenticação ser validada.
+       ====================================================================== -->
+  <div id="admin-tela-login" class="login-wrapper">
+    <div class="login-card">
+      
+      <!-- Logotipo Oficial da Casinha -->
+      <svg class="login-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- Chaminé com fumaça -->
+        <rect x="66" y="24" width="12" height="24" rx="2" fill="#5A140B" stroke="#F5C531" stroke-width="1.5"/>
+        <path d="M72 18C70 14 74 12 71 8" stroke="#F7E3B5" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="2 3"/>
+        <!-- Telhado aconchegante -->
+        <path d="M50 12L12 44H88L50 12Z" fill="#7A1F12" stroke="#F5C531" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- Paredes -->
+        <rect x="20" y="43" width="60" height="45" rx="3" fill="#FFF3DC" stroke="#5A140B" stroke-width="2.5"/>
+        <!-- Porta -->
+        <rect x="42" y="58" width="16" height="30" rx="3" fill="#7A1F12" stroke="#5A140B" stroke-width="1.5"/>
+        <circle cx="53" cy="74" r="1.5" fill="#F5C531"/>
+        <!-- Janelas -->
+        <rect x="25" y="52" width="13" height="15" rx="2" fill="#F7E3B5" stroke="#7A1F12" stroke-width="1.5"/>
+        <line x1="31.5" y1="52" x2="31.5" y2="67" stroke="#7A1F12" stroke-width="1.5"/>
+        <line x1="25" y1="59.5" x2="38" y2="59.5" stroke="#7A1F12" stroke-width="1.5"/>
+        <rect x="62" y="52" width="13" height="15" rx="2" fill="#F7E3B5" stroke="#7A1F12" stroke-width="1.5"/>
+        <line x1="68.5" y1="52" x2="68.5" y2="67" stroke="#7A1F12" stroke-width="1.5"/>
+        <line x1="62" y1="59.5" x2="75" y2="59.5" stroke="#7A1F12" stroke-width="1.5"/>
+        <!-- Coração -->
+        <path d="M50 34C48 31 44 32 44 35C44 38 50 41 50 41C50 41 56 38 56 35C56 32 52 31 50 34Z" fill="#F5C531"/>
+      </svg>
+
+      <span class="login-pre-titulo">Lanchonete Casa Branca</span>
+      <h1 class="login-titulo">Área do Proprietário</h1>
+      <p class="login-sub">Painel restrito de gerenciamento e pedidos</p>
+
+      <form id="form-login-admin" style="display:flex; flex-direction:column; gap:1.1rem; text-align:left;">
+        
+        <div class="form-group">
+          <label for="login-email" class="form-label">E-mail de Acesso</label>
+          <input 
+            type="email" 
+            id="login-email" 
+            class="form-input" 
+            value="casabranca@gmail.com"
+            placeholder="casabranca@gmail.com" 
+            autocomplete="username" 
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="login-senha" class="form-label">Senha</label>
+          <div class="input-senha-wrapper">
+            <input 
+              type="password" 
+              id="login-senha" 
+              class="form-input" 
+              placeholder="Digite sua senha" 
+              autocomplete="current-password" 
+              required
+            />
+            <button 
+              type="button" 
+              class="btn-toggle-senha" 
+              id="btn-toggle-senha-login" 
+              aria-label="Mostrar ou ocultar senha"
+            >
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <div class="login-links-row">
+          <label class="checkbox-lembrar">
+            <input type="checkbox" id="chk-lembrar-sessao" checked>
+            <span>Manter conectado</span>
+          </label>
+          <button type="button" class="link-esqueci-senha" id="btn-esqueci-senha">
+            Esqueci minha senha
+          </button>
+        </div>
+
+        <button type="submit" class="btn-login-submit" id="btn-login-submit">
+          <span class="btn-login-texto">Entrar no Painel</span>
+        </button>
+
+      </form>
+
+      <div style="margin-top: 1.75rem;">
+        <a href="index.html" style="font-size: 0.88rem; color: var(--primary); font-weight: 800; display:inline-flex; align-items:center; gap:0.4rem;">
+          ← Voltar ao cardápio público
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       TELA 2: PAINEL ADMINISTRATIVO COMPLETO
+       Inicia estritamente oculto com display:none no HTML.
+       Somente é liberado após o Firebase validar a autenticação do admin.
+       ====================================================================== -->
+  <div id="admin-tela-painel" style="display: none;">
+    
+    <!-- Topo de Navegação do Admin -->
+    <header class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="admin-nav-brand">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:32px; height:32px;">
+            <path d="M50 12L12 44H88L50 12Z" fill="#FFF3DC"/>
+            <rect x="20" y="43" width="60" height="45" fill="#F7E3B5"/>
+          </svg>
+          <span>Casa Branca • Painel do Dono</span>
+        </div>
+        <div class="admin-nav-acoes">
+          <a href="index.html" target="_blank" class="btn-nav-site">👁️ Ver Cardápio</a>
+          <button id="btn-admin-logout" class="btn-logout" title="Encerrar sessão de forma segura">
+            <span>Sair</span> 🚪
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Barra de Abas Fixa -->
+    <nav class="admin-tabs-nav" aria-label="Navegação do Painel">
+      <div class="admin-tabs-container">
+        <button class="admin-tab-btn ativo" data-tab="tab-pedidos">
+          🔔 Pedidos em Aberto <span id="badge-pedidos-novos-count" class="admin-badge-count">0</span>
+        </button>
+        <button class="admin-tab-btn" data-tab="tab-produtos">
+          🍔 Cardápio & Produtos
+        </button>
+        <button class="admin-tab-btn" data-tab="tab-categorias">
+          📂 Categorias
+        </button>
+        <button class="admin-tab-btn" data-tab="tab-clientes">
+          👥 Clientes
+        </button>
+        <button class="admin-tab-btn" data-tab="tab-configuracoes">
+          ⚙️ Configurações & Cores
+        </button>
+        <button class="admin-tab-btn" data-tab="tab-seguranca">
+          🛡️ Minha Conta & Segurança
+        </button>
+      </div>
+    </nav>
+
+    <!-- Conteúdo Principal -->
+    <main class="admin-main">
+
+      <!-- ==================================================================
+           ABA 1: PEDIDOS EM TEMPO REAL
+           ================================================================== -->
+      <section id="tab-pedidos" class="admin-tab-content ativo">
+        <div class="admin-secao-card">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">Pedidos Recebidos</h2>
+            <div>
+              <button id="btn-exportar-pedidos" class="btn-adicionar" style="font-size: 0.85rem; padding: 0.45rem 0.85rem;">
+                📥 Exportar Pedidos (CSV)
+              </button>
+            </div>
+          </div>
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.25rem;">
+            Os pedidos chegam em tempo real acompanhados de alerta sonoro. Altere o status ou abra o WhatsApp do cliente com 1 toque.
+          </p>
+          <div id="grid-pedidos-admin" class="pedidos-grid">
+            <!-- Gerado dinamicamente -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           ABA 2: PRODUTOS (CRUD COMPLETO)
+           ================================================================== -->
+      <section id="tab-produtos" class="admin-tab-content">
+        <div class="admin-secao-card">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">Gerenciar Produtos</h2>
+            <button id="btn-novo-produto" class="btn-adicionar">
+              + Cadastrar Novo Produto
+            </button>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap: 0.75rem; margin-bottom: 1.25rem;">
+            <input type="text" id="busca-admin-produtos" class="form-input" placeholder="Buscar por nome ou descrição..." style="flex: 1; min-width: 200px;">
+            <select id="filtro-prod-categoria" class="form-select" style="max-width: 250px;">
+              <option value="todas">Todas as categorias</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="admin-tabela">
+              <thead>
+                <tr>
+                  <th style="width: 60px;">Foto</th>
+                  <th>Produto</th>
+                  <th>Categoria</th>
+                  <th>Preço</th>
+                  <th>Status</th>
+                  <th style="width: 100px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-produtos-body">
+                <!-- Gerado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           ABA 3: CATEGORIAS (CRUD)
+           ================================================================== -->
+      <section id="tab-categorias" class="admin-tab-content">
+        <div class="admin-secao-card">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">Gerenciar Categorias</h2>
+            <button id="btn-nova-categoria" class="btn-adicionar">
+              + Nova Categoria
+            </button>
+          </div>
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.25rem;">
+            Crie, reordene e ative/oculte seções como Salgados, Lanches, Bebidas etc. A seção Destaques/Promoções é automática.
+          </p>
+          <div class="table-responsive">
+            <table class="admin-tabela">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Ordem</th>
+                  <th>Nome da Categoria</th>
+                  <th>Status</th>
+                  <th style="width: 100px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-categorias-body">
+                <!-- Gerado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           ABA 4: CLIENTES & BACKUP CSV
+           ================================================================== -->
+      <section id="tab-clientes" class="admin-tab-content">
+        <div class="admin-secao-card">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">Base de Clientes (<span id="badge-total-clientes">0</span>)</h2>
+            <button id="btn-exportar-clientes" class="btn-adicionar" style="font-size: 0.85rem; padding: 0.45rem 0.85rem;">
+              📥 Exportar Clientes (CSV)
+            </button>
+          </div>
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.25rem;">
+            Os clientes são salvos com endereço e ponto de referência, reconhecidos automaticamente pelo telefone.
+          </p>
+          <div style="margin-bottom: 1.25rem;">
+            <input type="text" id="busca-admin-clientes" class="form-input" placeholder="Buscar cliente por nome, telefone ou rua...">
+          </div>
+          <div class="table-responsive">
+            <table class="admin-tabela">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Telefone</th>
+                  <th>Endereço</th>
+                  <th>Referência</th>
+                  <th style="width: 70px;">WhatsApp</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-clientes-body">
+                <!-- Gerado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           ABA 5: CONFIGURAÇÕES, LOJA, TAXAS E PALETA DE CORES
+           ================================================================== -->
+      <section id="tab-configuracoes" class="admin-tab-content">
+        
+        <!-- Interruptor Aberto / Fechado -->
+        <div class="admin-secao-card">
+          <div class="loja-switch-wrapper">
+            <div class="loja-status-display">
+              <span id="cfg-loja-indicador" class="loja-status-indicador"></span>
+              <div class="loja-status-texto">
+                <h3 id="cfg-loja-aberto-texto">Carregando status...</h3>
+                <small style="color: #666;">Alterne entre receber pedidos normalmente ou fechar a loja temporariamente.</small>
+              </div>
+            </div>
+            <button type="button" id="btn-toggle-loja-status" class="btn-toggle-loja">
+              Carregando...
+            </button>
+          </div>
+        </div>
+
+        <!-- Formulário de Regras de Negócio e Dados -->
+        <div class="admin-secao-card">
+          <h2 class="admin-secao-titulo" style="margin-bottom: 1.25rem;">Dados e Regras de Entrega / Retirada</h2>
+          <form id="form-config-gerais">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+              <div class="form-group">
+                <label for="cfg-nome" class="form-label">Nome da Lanchonete</label>
+                <input type="text" id="cfg-nome" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label for="cfg-slogan" class="form-label">Slogan</label>
+                <input type="text" id="cfg-slogan" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label for="cfg-whatsapp" class="form-label">WhatsApp para Pedidos (apenas números)</label>
+                <input type="text" id="cfg-whatsapp" class="form-input" placeholder="74999177156" required>
+              </div>
+              <div class="form-group">
+                <label for="cfg-local" class="form-label">Localização (Retirada)</label>
+                <input type="text" id="cfg-local" class="form-input" value="Praça da quadra" required>
+              </div>
+              <div class="form-group">
+                <label for="cfg-modo-destaque" class="form-label">Modo da Seção Especial</label>
+                <select id="cfg-modo-destaque" class="form-select">
+                  <option value="promocoes">🔥 Promoções Especiais (destaque em preços baixos)</option>
+                  <option value="destaques">⭐ Destaques da Casa (favoritos dos clientes)</option>
+                </select>
+              </div>
+            </div>
+
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--primary); margin: 1.5rem 0 0.75rem;">Opções de Entrega e Retirada</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; background: var(--bg-cream); padding: 1rem; border-radius: 12px; margin-bottom: 1.25rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700;">
+                <input type="checkbox" id="cfg-entrega-ativa"> Permitir Entrega
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700;">
+                <input type="checkbox" id="cfg-retirada-ativa"> Permitir Retirada no Local
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700;">
+                <input type="checkbox" id="cfg-taxa-ativa"> Cobrar Taxa de Entrega
+              </label>
+              <div class="form-group">
+                <label for="cfg-taxa-valor" class="form-label">Valor da Taxa (R$)</label>
+                <input type="number" step="0.50" min="0" id="cfg-taxa-valor" class="form-input" placeholder="3.00">
+              </div>
+              <div class="form-group">
+                <label for="cfg-minimo-entrega" class="form-label">Valor Mínimo para Entrega (R$)</label>
+                <input type="number" step="1.00" min="0" id="cfg-minimo-entrega" class="form-input" placeholder="10.00">
+                <small style="color:#666;">(0 = sem valor mínimo)</small>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-adicionar" style="font-size: 1rem; padding: 0.8rem 1.8rem;">
+              💾 Salvar Configurações Gerais
+            </button>
+          </form>
+        </div>
+
+        <!-- Seletor de Cores da Paleta -->
+        <div class="admin-secao-card">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">🎨 Paleta de Cores do Site (Ao Vivo)</h2>
+            <button type="button" id="btn-resetar-cores" class="btn-nav-site" style="background:#5A140B;">
+              Restaurar Padrão
+            </button>
+          </div>
+          <p style="font-size: 0.9rem; color: #666;">
+            Personalize todas as cores principais da Lanchonete. As alterações são sincronizadas e aplicadas para todos os clientes.
+          </p>
+          <form id="form-config-cores">
+            <div class="palette-grid">
+              <div class="color-input-card">
+                <input type="color" id="cor-primary" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Marrom Avermelhado</span>
+                  <span class="color-hex" id="hex-primary">#7A1F12</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-primaryDark" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Marrom Escuro</span>
+                  <span class="color-hex" id="hex-primaryDark">#5A140B</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-bgCream" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Creme Fundo</span>
+                  <span class="color-hex" id="hex-bgCream">#FFF3DC</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-cardCream" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Creme Cards</span>
+                  <span class="color-hex" id="hex-cardCream">#F7E3B5</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-greenOpen" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Verde Aberto</span>
+                  <span class="color-hex" id="hex-greenOpen">#5E8C3A</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-yellowGold" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Amarelo Dourado</span>
+                  <span class="color-hex" id="hex-yellowGold">#F5C531</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-orangeTerra" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Laranja Terra</span>
+                  <span class="color-hex" id="hex-orangeTerra">#E87D2F</span>
+                </div>
+              </div>
+              <div class="color-input-card">
+                <input type="color" id="cor-textLight" class="color-picker-input">
+                <div class="color-info">
+                  <span class="color-title">Texto Claro</span>
+                  <span class="color-hex" id="hex-textLight">#FFFFFF</span>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 1.5rem;">
+              <button type="submit" class="btn-adicionar" style="font-size: 1rem; padding: 0.8rem 1.8rem;">
+                💾 Salvar Paleta de Cores
+              </button>
+            </div>
+          </form>
+        </div>
+
+      </section>
+
+      <!-- ==================================================================
+           ABA 6: MINHA CONTA & SEGURANÇA (ÁREA EXCLUSIVA DO DONO)
+           ================================================================== -->
+      <section id="tab-seguranca" class="admin-tab-content">
+        <div class="admin-secao-card">
+          <div class="admin-secao-header">
+            <h2 class="admin-secao-titulo">🛡️ Minha Conta & Credenciais</h2>
+          </div>
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.5rem;">
+            Gerencie o seu e-mail de acesso e altere sua senha de administrador. Por segurança, alterações requerem a confirmação da sua senha atual.
+          </p>
+
+          <div style="background:var(--bg-cream); border:1.5px solid rgba(122,31,18,0.15); border-radius:12px; padding:1.25rem; margin-bottom: 1.75rem;">
+            <div style="display:flex; flex-direction:column; gap:0.35rem;">
+              <span style="font-size:0.85rem; font-weight:800; color:var(--text-muted);">E-MAIL ATUALMENTE CONECTADO:</span>
+              <strong id="admin-user-email-display" style="font-size:1.15rem; color:var(--primary);">carregando...</strong>
+              <small style="color:#666;">ID do Proprietário (UID): <span id="admin-user-uid-display" style="font-family:monospace; font-weight:bold;">-</span></small>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.75rem;">
+            
+            <!-- Formulário: Alterar Senha -->
+            <div style="background:#fff; border:1px solid rgba(0,0,0,0.1); border-radius:12px; padding:1.25rem; box-shadow:var(--shadow-sm);">
+              <h3 style="font-size:1.1rem; font-weight:800; color:var(--primary); margin-bottom:1rem;">🔑 Alterar Senha de Acesso</h3>
+              <form id="form-alterar-senha" style="display:flex; flex-direction:column; gap:0.9rem;">
+                <div class="form-group">
+                  <label for="alt-senha-atual" class="form-label">Senha Atual *</label>
+                  <input type="password" id="alt-senha-atual" class="form-input" placeholder="Digite sua senha atual" required>
+                </div>
+                <div class="form-group">
+                  <label for="alt-nova-senha" class="form-label">Nova Senha *</label>
+                  <input type="password" id="alt-nova-senha" class="form-input" placeholder="Mínimo 8 dígitos (letras e números)" required>
+                  
+                  <!-- Medidor de força da senha -->
+                  <div class="forca-senha-wrapper">
+                    <div class="forca-senha-barra">
+                      <div id="forca-senha-preenchimento" class="forca-senha-preenchimento"></div>
+                    </div>
+                    <span id="forca-senha-texto" class="forca-senha-texto">Digite a nova senha para medir a segurança</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="alt-nova-senha-confirma" class="form-label">Confirmar Nova Senha *</label>
+                  <input type="password" id="alt-nova-senha-confirma" class="form-input" placeholder="Repita a nova senha" required>
+                </div>
+                <button type="submit" id="btn-submit-alterar-senha" class="btn-adicionar" style="justify-content:center; padding:0.8rem; margin-top:0.5rem;">
+                  Atualizar Senha
+                </button>
+              </form>
+            </div>
+
+            <!-- Formulário: Alterar E-mail -->
+            <div style="background:#fff; border:1px solid rgba(0,0,0,0.1); border-radius:12px; padding:1.25rem; box-shadow:var(--shadow-sm);">
+              <h3 style="font-size:1.1rem; font-weight:800; color:var(--primary); margin-bottom:1rem;">✉️ Alterar E-mail de Login</h3>
+              <form id="form-alterar-email" style="display:flex; flex-direction:column; gap:0.9rem;">
+                <div class="form-group">
+                  <label for="alt-email-novo" class="form-label">Novo E-mail *</label>
+                  <input type="email" id="alt-email-novo" class="form-input" placeholder="novo.email@casabranca.com" required>
+                </div>
+                <div class="form-group">
+                  <label for="alt-email-senha-atual" class="form-label">Sua Senha Atual (Confirmação) *</label>
+                  <input type="password" id="alt-email-senha-atual" class="form-input" placeholder="Confirme sua senha para validar" required>
+                </div>
+                <button type="submit" id="btn-submit-alterar-email" class="btn-adicionar" style="justify-content:center; padding:0.8rem; margin-top:0.5rem;">
+                  Atualizar E-mail
+                </button>
+              </form>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ======================================================================
+       MODAL: RECUPERAÇÃO DE SENHA (ESQUECI MINHA SENHA)
+       ====================================================================== -->
+  <div id="modal-recuperar-senha" class="admin-modal-overlay">
+    <div class="admin-modal-content" style="max-width: 440px;">
+      <div class="admin-secao-header">
+        <h3 class="admin-secao-titulo">Redefinir Senha</h3>
+        <button type="button" id="btn-fechar-modal-recuperar" class="btn-fechar-modal" style="color:var(--primary);">&times;</button>
+      </div>
+      <p style="font-size:0.9rem; color:#666; margin-bottom:1rem;">
+        Informe seu e-mail cadastrado. Enviaremos um link oficial e seguro do Firebase para você redefinir sua senha.
+      </p>
+      <form id="form-recuperar-senha" style="display:flex; flex-direction:column; gap:1rem;">
+        <div class="form-group">
+          <label for="recuperar-email" class="form-label">E-mail Cadastrado</label>
+          <input type="email" id="recuperar-email" class="form-input" placeholder="proprietario@casabranca.com" required>
+        </div>
+        <button type="submit" id="btn-submit-recuperar" class="btn-login-submit">
+          Enviar Link de Redefinição
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       MODAL: CRIAR / EDITAR PRODUTO
+       ====================================================================== -->
+  <div id="modal-admin-produto" class="admin-modal-overlay">
+    <div class="admin-modal-content">
+      <div class="admin-secao-header">
+        <h3 id="modal-prod-titulo" class="admin-secao-titulo">Novo Produto</h3>
+        <button type="button" id="btn-fechar-modal-prod" class="btn-fechar-modal" style="color:var(--primary);">&times;</button>
+      </div>
+      <form id="form-modal-produto" style="display:flex; flex-direction:column; gap:1rem;">
+        <input type="hidden" id="modal-prod-id">
+        <div class="form-group">
+          <label for="prod-nome" class="form-label">Nome do Produto *</label>
+          <input type="text" id="prod-nome" class="form-input" placeholder="Ex: Coxinha de Frango" required>
+        </div>
+        <div class="form-group">
+          <label for="prod-categoria" class="form-label">Categoria *</label>
+          <select id="prod-categoria" class="form-select" required></select>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+          <div class="form-group">
+            <label for="prod-preco" class="form-label">Preço Normal (R$) *</label>
+            <input type="number" step="0.10" min="0" id="prod-preco" class="form-input" placeholder="1.00" required>
+          </div>
+          <div class="form-group">
+            <label for="prod-preco-promo" class="form-label">Preço Promocional (R$)</label>
+            <input type="number" step="0.10" min="0" id="prod-preco-promo" class="form-input" placeholder="Deixe vazio se não houver">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="prod-descricao" class="form-label">Descrição Apetite</label>
+          <textarea id="prod-descricao" class="form-textarea" rows="2" placeholder="Descreva os ingredientes de dar água na boca..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="prod-foto" class="form-label">URL da Foto</label>
+          <input type="url" id="prod-foto" class="form-input" placeholder="https://exemplo.com/foto-do-lanche.jpg">
+          <small style="color:#666;">Dica: Use links diretos do Unsplash, Imgur ou do seu Firebase Storage.</small>
+        </div>
+        <div class="form-group">
+          <label for="prod-obs" class="form-label">Observação Especial no Card</label>
+          <input type="text" id="prod-obs" class="form-input" placeholder="Ex: Salsicha, calabresa e presunto são de frango!">
+        </div>
+        <div style="display:flex; gap:1.5rem; background:var(--bg-cream); padding:0.75rem; border-radius:8px;">
+          <label style="display:flex; align-items:center; gap:0.4rem; font-weight:700;">
+            <input type="checkbox" id="prod-disponivel" checked> Disponível no Cardápio
+          </label>
+          <label style="display:flex; align-items:center; gap:0.4rem; font-weight:700;">
+            <input type="checkbox" id="prod-destaque"> Aparecer em Destaque
+          </label>
+        </div>
+        <button type="submit" class="btn-adicionar" style="justify-content:center; padding:0.9rem; font-size:1rem; width:100%;">
+          Salvar Produto
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       MODAL: CRIAR / EDITAR CATEGORIA
+       ====================================================================== -->
+  <div id="modal-admin-categoria" class="admin-modal-overlay">
+    <div class="admin-modal-content">
+      <div class="admin-secao-header">
+        <h3 id="modal-cat-titulo" class="admin-secao-titulo">Nova Categoria</h3>
+        <button type="button" id="btn-fechar-modal-cat" class="btn-fechar-modal" style="color:var(--primary);">&times;</button>
+      </div>
+      <form id="form-modal-categoria" style="display:flex; flex-direction:column; gap:1rem;">
+        <input type="hidden" id="modal-cat-id">
+        <div class="form-group">
+          <label for="cat-nome" class="form-label">Nome da Categoria *</label>
+          <input type="text" id="cat-nome" class="form-input" placeholder="Ex: Lanches, Sucos, Sobremesas" required>
+        </div>
+        <div class="form-group">
+          <label for="cat-ordem" class="form-label">Ordem de Exibição (Número menor aparece primeiro)</label>
+          <input type="number" min="1" id="cat-ordem" class="form-input" value="1" required>
+        </div>
+        <div style="background:var(--bg-cream); padding:0.75rem; border-radius:8px;">
+          <label style="display:flex; align-items:center; gap:0.4rem; font-weight:700;">
+            <input type="checkbox" id="cat-ativa" checked> Categoria Ativa no Site
+          </label>
+        </div>
+        <button type="submit" class="btn-adicionar" style="justify-content:center; padding:0.9rem; font-size:1rem; width:100%;">
+          Salvar Categoria
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Container de Toasts -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Script Admin Integrado com auth.js -->
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
