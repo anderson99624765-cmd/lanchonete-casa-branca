@@ -10,26 +10,23 @@ import {
   assinarEstadoAutenticacao as assinarAuthFirebase,
   sendPasswordResetEmail,
   updatePassword,
-  updateEmail,
+  verifyBeforeUpdateEmail,
   reauthenticateWithCredential,
   EmailAuthProvider,
   conexaoValida 
 } from "./modules/firebase-service.js";
-import { mostrarToast, sanitizarTexto } from "./modules/utils.js";
-
-// Credenciais de Administrador definidas para o sistema
-export const ADMIN_CREDENCIAIS = {
-  email: "casabranca@gmail.com",
-  senha: "casabranca1379"
-};
-
-// Chave para persistência local de sessão administrativa
-const STORAGE_ADMIN_SESSION_KEY = "casabranca_admin_auth_session";
+import { mostrarToast } from "./modules/utils.js";
 
 // Configurações de tempo para encerramento de sessão por inatividade
 const TEMPO_INATIVIDADE_MS = 2 * 60 * 60 * 1000; // 2 horas de inatividade
 let timerInatividade = null;
-let callbackAuthCadastrado = null;
+
+try {
+  localStorage.removeItem('casabranca_admin_auth_session');
+  sessionStorage.removeItem('casabranca_admin_auth_session');
+} catch (erro) {
+  console.warn('Não foi possível remover uma sessão local antiga:', erro);
+}
 
 /**
  * Tradutor de códigos de erro para português amigável e seguro
@@ -63,6 +60,12 @@ export function traduzirErroAuth(codigo) {
 
     case 'auth/requires-recent-login':
       return 'Por questões de segurança, faça login novamente antes de realizar esta alteração.';
+
+    case 'firebase/not-configured':
+      return 'Firebase não configurado. Preencha js/firebase.js para autenticar e usar o painel.';
+
+    case 'auth/not-authenticated':
+      return 'Sua sessão Firebase expirou. Entre novamente para continuar.';
 
     default:
       return 'Não foi possível concluir a autenticação. Tente novamente mais tarde.';
@@ -111,13 +114,16 @@ export function validarForcaSenha(senha) {
   };
 }
 
+const EVENTOS_ATIVIDADE = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+let aoInteragir = null;
+
 /**
  * Gerenciador de Inatividade do Administrador (Auto-logout após 2 horas sem interação)
  */
 export function iniciarMonitorInatividade() {
   pararMonitorInatividade();
 
-  const resetarTimer = () => {
+  aoInteragir = () => {
     clearTimeout(timerInatividade);
     timerInatividade = setTimeout(async () => {
       try {
@@ -129,11 +135,8 @@ export function iniciarMonitorInatividade() {
     }, TEMPO_INATIVIDADE_MS);
   };
 
-  ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
-    window.addEventListener(evt, resetarTimer, { passive: true });
-  });
-
-  resetarTimer();
+  EVENTOS_ATIVIDADE.forEach((evt) => window.addEventListener(evt, aoInteragir, { passive: true }));
+  aoInteragir();
 }
 
 export function pararMonitorInatividade() {
@@ -141,42 +144,21 @@ export function pararMonitorInatividade() {
     clearTimeout(timerInatividade);
     timerInatividade = null;
   }
+  if (aoInteragir) {
+    EVENTOS_ATIVIDADE.forEach((evt) => window.removeEventListener(evt, aoInteragir));
+    aoInteragir = null;
+  }
 }
 
 /**
  * Assina o estado de autenticação do administrador
  */
 export function assinarEstadoAutenticacao(callback) {
-  callbackAuthCadastrado = callback;
-
-  if (conexaoValida && auth) {
-    return assinarAuthFirebase((user) => {
-      if (user) {
-        callback(user);
-      } else {
-        // Verifica se há sessão local ativa
-        const localUser = checarSessaoLocal();
-        callback(localUser);
-      }
-    });
-  } else {
-    // Modo com persistência local
-    const localUser = checarSessaoLocal();
-    callback(localUser);
+  if (!conexaoValida || !auth) {
+    callback(null);
     return () => {};
   }
-}
-
-function checarSessaoLocal() {
-  try {
-    const salvo = localStorage.getItem(STORAGE_ADMIN_SESSION_KEY) || sessionStorage.getItem(STORAGE_ADMIN_SESSION_KEY);
-    if (salvo) {
-      return JSON.parse(salvo);
-    }
-  } catch (e) {
-    console.warn("Falha ao ler sessão local:", e);
-  }
-  return null;
+  return assinarAuthFirebase(callback);
 }
 
 /**
@@ -184,73 +166,17 @@ function checarSessaoLocal() {
  */
 export async function loginAdmin(email, senha, manterConectado = true) {
   const emailNorm = (email || '').trim().toLowerCase();
-  const senhaNorm = (senha || '').trim();
-
-  // 1. Se o Firebase estiver com chaves conectadas no projeto
-  if (conexaoValida && auth) {
-    try {
-      const userCred = await loginAdminFirebase(emailNorm, senhaNorm, manterConectado);
-      return userCred.user;
-    } catch (errFirebase) {
-      // Se falhar no Firebase, valida se é a credencial padrão configurada
-      if (emailNorm === ADMIN_CREDENCIAIS.email && senhaNorm === ADMIN_CREDENCIAIS.senha) {
-        const userObj = {
-          email: ADMIN_CREDENCIAIS.email,
-          uid: "admin-casabranca-local",
-          displayName: "Proprietário Casa Branca"
-        };
-        salvarSessaoLocal(userObj, manterConectado);
-        if (callbackAuthCadastrado) callbackAuthCadastrado(userObj);
-        return userObj;
-      }
-      throw errFirebase;
-    }
-  }
-
-  // 2. Validação direta com as credenciais solicitadas (casabranca@gmail.com / casabranca1379)
-  if (emailNorm === ADMIN_CREDENCIAIS.email && senhaNorm === ADMIN_CREDENCIAIS.senha) {
-    const userObj = {
-      email: ADMIN_CREDENCIAIS.email,
-      uid: "admin-casabranca-local",
-      displayName: "Proprietário Casa Branca"
-    };
-    salvarSessaoLocal(userObj, manterConectado);
-    if (callbackAuthCadastrado) callbackAuthCadastrado(userObj);
-    return userObj;
-  } else {
-    throw { code: 'auth/invalid-login-credentials' };
-  }
-}
-
-function salvarSessaoLocal(userObj, manterConectado) {
-  try {
-    const dados = JSON.stringify(userObj);
-    if (manterConectado) {
-      localStorage.setItem(STORAGE_ADMIN_SESSION_KEY, dados);
-      sessionStorage.removeItem(STORAGE_ADMIN_SESSION_KEY);
-    } else {
-      sessionStorage.setItem(STORAGE_ADMIN_SESSION_KEY, dados);
-      localStorage.removeItem(STORAGE_ADMIN_SESSION_KEY);
-    }
-  } catch (e) {
-    console.warn("Erro ao salvar sessão:", e);
-  }
+  if (!conexaoValida || !auth) throw { code: 'firebase/not-configured' };
+  const userCred = await loginAdminFirebase(emailNorm, senha, manterConectado);
+  return userCred.user;
 }
 
 /**
  * Realiza o encerramento seguro da sessão
  */
 export async function logoutAdmin() {
-  try {
-    localStorage.removeItem(STORAGE_ADMIN_SESSION_KEY);
-    sessionStorage.removeItem(STORAGE_ADMIN_SESSION_KEY);
-    if (conexaoValida && auth) {
-      await logoutAdminFirebase();
-    }
-  } catch (e) {
-    console.warn("Erro ao deslogar:", e);
-  }
-  if (callbackAuthCadastrado) callbackAuthCadastrado(null);
+  if (!conexaoValida || !auth) throw { code: 'firebase/not-configured' };
+  await logoutAdminFirebase();
 }
 
 /**
@@ -262,14 +188,8 @@ export async function recuperarSenha(email) {
     throw { code: 'auth/invalid-email' };
   }
 
-  if (conexaoValida && auth) {
-    return sendPasswordResetEmail(auth, emailNorm);
-  } else {
-    if (emailNorm === ADMIN_CREDENCIAIS.email) {
-      return true;
-    }
-    throw { code: 'auth/user-not-found' };
-  }
+  if (!conexaoValida || !auth) throw { code: 'firebase/not-configured' };
+  return sendPasswordResetEmail(auth, emailNorm);
 }
 
 /**
@@ -281,22 +201,15 @@ export async function alterarSenhaAdmin(senhaAtual, novaSenha) {
     throw new Error(validacao.mensagem);
   }
 
-  if (conexaoValida && auth && auth.currentUser) {
-    const user = auth.currentUser;
-    const credencial = EmailAuthProvider.credential(user.email, senhaAtual);
-    await reauthenticateWithCredential(user, credencial);
-    return updatePassword(user, novaSenha);
-  } else {
-    if (senhaAtual !== ADMIN_CREDENCIAIS.senha) {
-      throw { code: 'auth/wrong-password' };
-    }
-    ADMIN_CREDENCIAIS.senha = novaSenha;
-    return true;
-  }
+  if (!conexaoValida || !auth?.currentUser) throw { code: 'auth/not-authenticated' };
+  const user = auth.currentUser;
+  const credencial = EmailAuthProvider.credential(user.email, senhaAtual);
+  await reauthenticateWithCredential(user, credencial);
+  return updatePassword(user, novaSenha);
 }
 
 /**
- * Altera o e-mail de acesso do administrador
+ * Solicita a troca do e-mail de acesso (exige confirmação por link no novo e-mail)
  */
 export async function alterarEmailAdmin(senhaAtual, novoEmail) {
   const novoEmailNorm = (novoEmail || '').trim().toLowerCase();
@@ -304,24 +217,12 @@ export async function alterarEmailAdmin(senhaAtual, novoEmail) {
     throw { code: 'auth/invalid-email' };
   }
 
-  if (conexaoValida && auth && auth.currentUser) {
-    const user = auth.currentUser;
-    const credencial = EmailAuthProvider.credential(user.email, senhaAtual);
-    await reauthenticateWithCredential(user, credencial);
-    return updateEmail(user, novoEmailNorm);
-  } else {
-    if (senhaAtual !== ADMIN_CREDENCIAIS.senha) {
-      throw { code: 'auth/wrong-password' };
-    }
-    ADMIN_CREDENCIAIS.email = novoEmailNorm;
-    const localUser = checarSessaoLocal();
-    if (localUser) {
-      localUser.email = novoEmailNorm;
-      localStorage.setItem(STORAGE_ADMIN_SESSION_KEY, JSON.stringify(localUser));
-      if (callbackAuthCadastrado) callbackAuthCadastrado(localUser);
-    }
-    return true;
-  }
+  if (!conexaoValida || !auth?.currentUser) throw { code: 'auth/not-authenticated' };
+  const user = auth.currentUser;
+  const credencial = EmailAuthProvider.credential(user.email, senhaAtual);
+  await reauthenticateWithCredential(user, credencial);
+  // updateEmail foi descontinuado: o Firebase envia um link de confirmação ao novo e-mail.
+  return verifyBeforeUpdateEmail(user, novoEmailNorm);
 }
 
 export { auth };

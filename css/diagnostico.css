@@ -1,0 +1,76 @@
+.diagnostico-body {
+  background: #FFF3DC;
+}
+
+.diagnostico-header {
+  padding: 1.25rem 1rem 1.75rem;
+  color: #fff;
+  background: #7A1F12;
+  border-radius: 0 0 12px 12px;
+}
+
+.diagnostico-header a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  font-weight: 800;
+}
+
+.diagnostico-header p {
+  margin-top: 1rem;
+  color: #F5C531;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.diagnostico-header h1 {
+  margin-top: 0.3rem;
+  font-size: 1.6rem;
+}
+
+.diagnostico-main {
+  width: min(calc(100% - 2rem), 850px);
+  margin: 1.5rem auto 3rem;
+}
+
+.diagnostico-main > p {
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  background: #fff;
+  border-left: 4px solid #E87D2F;
+  font-weight: 800;
+}
+
+.diagnostico-resultados {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.diagnostico-item {
+  padding: 0.85rem;
+  background: #fff;
+  border: 1px solid rgba(122,31,18,0.16);
+  border-left: 5px solid #6B4E3D;
+  border-radius: 6px;
+}
+
+.diagnostico-item[data-status="pass"] { border-left-color: #5E8C3A; }
+.diagnostico-item[data-status="fail"] { border-left-color: #D32F2F; }
+.diagnostico-item[data-status="warn"] { border-left-color: #E87D2F; }
+
+.diagnostico-item strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.diagnostico-item span {
+  overflow-wrap: anywhere;
+  color: #6B4E3D;
+  font-size: 0.9rem;
+}

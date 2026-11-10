@@ -198,7 +198,7 @@ export class CardapioView {
     }
 
     if (this.buscaTexto) {
-      titulo = `Resultados para "${sanitizarTexto(this.buscaTexto)}"`;
+      titulo = `Resultados para "${this.buscaTexto}"`;
     }
 
     const html = `

@@ -274,6 +274,40 @@ a {
   z-index: 10;
 }
 
+.database-status {
+  width: min(calc(100% - 2rem), 1000px);
+  margin: 0.75rem auto;
+  padding: 0.75rem 1rem;
+  border: 1px solid #D32F2F;
+  border-radius: 6px;
+  color: #8C1D18;
+  background: #FFEBEE;
+  font-weight: 800;
+}
+
+.database-status[hidden] {
+  display: none;
+}
+
+.admin-database-status {
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  color: #fff;
+  background: #A42620;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.admin-database-status.is-connected {
+  background: #2E7D32;
+}
+
+#admin-login-database-status {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+
 /* --------------------------------------------------------------------------
    BARRA DE CATEGORIAS FIXA E ROLÁVEL NA HORIZONTAL
    -------------------------------------------------------------------------- */

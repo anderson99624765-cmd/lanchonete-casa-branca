@@ -16,6 +16,8 @@ import {
   salvarEstimativaPedido,
   registrarNotificacaoPedido,
   assinarClientes,
+  assinarConexaoFirebase,
+  migrarDadosLocaisParaFirebase,
   verificarEExecutarSeed,
   conexaoValida 
 } from "./modules/firebase-service.js";
@@ -32,7 +34,7 @@ import {
   alterarSenhaAdmin,
   alterarEmailAdmin
 } from "./auth.js";
-import { CONFIG_PADRAO } from "./modules/firebase-config.js";
+import { ADMIN_UID, ADMIN_UID_CONFIGURADO, CONFIG_PADRAO } from "./firebase.js";
 import { 
   formatarMoeda, 
   sanitizarTexto, 
@@ -54,14 +56,31 @@ import {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Inicializando Painel Administrativo com Camada de Segurança...");
 
-  // Garante semente de dados se necessário
-  await verificarEExecutarSeed();
-
   // Elementos das Telas
   const telaLogin = document.getElementById('admin-tela-login');
   const telaPainel = document.getElementById('admin-tela-painel');
   const formLogin = document.getElementById('form-login-admin');
   const btnLogout = document.getElementById('btn-admin-logout');
+  const statusBanco = document.getElementById('admin-database-status');
+  const statusLoginBanco = document.getElementById('admin-login-database-status');
+  if (conexaoValida) {
+    if (statusBanco) statusBanco.textContent = '🟡 Conectando ao banco de dados...';
+    if (statusLoginBanco) statusLoginBanco.textContent = ADMIN_UID_CONFIGURADO
+      ? '🟡 Conectando ao banco de dados...'
+      : '🟠 Banco configurado; preencha o UID autorizado em js/firebase.js antes do primeiro login.';
+  }
+
+  const unsubscribeConexao = assinarConexaoFirebase((conectado) => {
+    const texto = conectado ? '🟢 Conectado ao banco de dados' : conexaoValida
+      ? '🔴 Sem conexão com o banco de dados'
+      : '🔴 Firebase não configurado. Preencha js/firebase.js';
+    if (statusBanco) {
+      statusBanco.textContent = texto;
+      statusBanco.classList.toggle('is-connected', conectado);
+    }
+    if (statusLoginBanco) statusLoginBanco.textContent = texto;
+  });
+  window.addEventListener('pagehide', unsubscribeConexao, { once: true });
 
   // Estado Geral
   let currentConfig = CONFIG_PADRAO;
@@ -75,15 +94,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   let pedidoAvisoAtual = null;
   let elementoFocoAviso = null;
   let textareaModeloAtiva = null;
+  const gravacoesEmAndamento = new Set();
+
+  function travarGravacao(chave, botao) {
+    if (gravacoesEmAndamento.has(chave)) return false;
+    gravacoesEmAndamento.add(chave);
+    if (botao) botao.disabled = true;
+    return true;
+  }
+
+  function liberarGravacao(chave, botao) {
+    gravacoesEmAndamento.delete(chave);
+    if (botao) botao.disabled = false;
+  }
 
   // ========================================================================
   // 1. FLUXO DE AUTENTICAÇÃO E CONTROLE DE ACESSO
   // ========================================================================
-  assinarEstadoAutenticacao((user) => {
+  assinarEstadoAutenticacao(async (user) => {
     usuarioAutenticado = user;
 
-    if (user) {
+    if (user && auth?.currentUser?.uid === user.uid && ADMIN_UID_CONFIGURADO && user.uid === ADMIN_UID) {
       console.log(`Administrador autenticado: ${user.email} (UID: ${user.uid})`);
+
+      try {
+        await verificarEExecutarSeed();
+      } catch (erro) {
+        if (telaLogin) telaLogin.style.display = 'flex';
+        if (telaPainel) telaPainel.style.display = 'none';
+        mostrarToast(`Não foi possível preparar o banco: ${erro.message}`, 'erro', 8000);
+        return;
+      }
       
       if (telaLogin) telaLogin.style.display = 'none';
       if (telaPainel) telaPainel.style.display = 'block';
@@ -97,6 +138,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       iniciarCarregamentoPainel();
 
     } else {
+      if (user) {
+        mostrarToast('Esta conta não corresponde ao UID de administrador configurado em js/firebase.js.', 'erro', 7000);
+        logoutAdmin().catch((erro) => console.error('Falha ao encerrar sessão não autorizada:', erro));
+      }
       pararMonitorInatividade();
       limparListenersAtivos();
 
@@ -231,15 +276,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 3. CARREGAMENTO DOS DADOS DO PAINEL (SOMENTE APÓS LOGIN)
   // ========================================================================
   function iniciarCarregamentoPainel() {
+    limparListenersAtivos();
     configurarAbas();
     configurarSegurancaConta();
 
     // 1. Configurações em tempo real
     const unsubsConfig = assinarConfiguracoes((config) => {
+      if (!config) return;
       currentConfig = { ...CONFIG_PADRAO, ...config };
       preencherFormConfig(currentConfig);
       aplicarCoresCss(currentConfig.cores);
-    });
+    }, mostrarFalhaLeitura);
     listenersAtivos.push(unsubsConfig);
 
     // 2. Categorias em tempo real
@@ -247,14 +294,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentCategorias = categorias || [];
       renderizarListaCategorias();
       atualizarSelectCategoriasProduto();
-    });
+    }, mostrarFalhaLeitura);
     listenersAtivos.push(unsubsCat);
 
     // 3. Produtos em tempo real
     const unsubsProd = assinarProdutos((produtos) => {
       currentProdutos = produtos || [];
       renderizarListaProdutos();
-    });
+    }, mostrarFalhaLeitura);
     listenersAtivos.push(unsubsProd);
 
     // 4. Pedidos em tempo real
@@ -266,17 +313,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       totalPedidosAnterior = pedidos.length;
       currentPedidos = pedidos || [];
       renderizarPedidos();
-    });
+    }, mostrarFalhaLeitura);
     listenersAtivos.push(unsubsPedidos);
 
     // 5. Clientes em tempo real
     const unsubsCli = assinarClientes((clientes) => {
       currentClientes = clientes || [];
       renderizarClientes();
-    });
+    }, mostrarFalhaLeitura);
     listenersAtivos.push(unsubsCli);
 
     configurarAcoesGerais();
+  }
+
+  function mostrarFalhaLeitura(erro) {
+    console.error('Falha ao carregar dados do Firebase:', erro);
+    mostrarToast(`Falha ao carregar dados do banco: ${erro.message || 'verifique as regras e a conexão.'}`, 'erro', 8000);
   }
 
   function configurarAbas() {
@@ -385,9 +437,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
           await alterarEmailAdmin(senhaAtual, novoEmail);
-          mostrarToast('E-mail atualizado com sucesso!', 'sucesso');
-          const elEmailDisplay = document.getElementById('admin-user-email-display');
-          if (elEmailDisplay) elEmailDisplay.textContent = novoEmail;
+          mostrarToast('Enviamos um link de confirmação para o novo e-mail. O e-mail de acesso só muda depois que você clicar nele.', 'sucesso', 9000);
           formAltEmail.reset();
         } catch (err) {
           console.error("Erro ao alterar e-mail:", err);
@@ -531,15 +581,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnToggleLoja = document.getElementById('btn-toggle-loja-status');
     if (btnToggleLoja) {
       btnToggleLoja.onclick = async () => {
+        if (!travarGravacao('toggle-loja', btnToggleLoja)) return;
         const novoStatus = !currentConfig.aberto;
         try {
           await salvarConfiguracoes({ aberto: novoStatus });
           currentConfig.aberto = novoStatus;
           preencherFormConfig(currentConfig);
-          mostrarToast(`Status alterado para: ${novoStatus ? 'ABERTO' : 'FECHADO'}!`, 'sucesso');
+          mostrarToast(`Salvo no banco ✅ Loja ${novoStatus ? 'aberta' : 'fechada'}.`, 'sucesso');
         } catch (e) {
           console.error("Erro ao alterar status da loja:", e);
           mostrarToast('Erro ao atualizar status da loja.', 'erro');
+        } finally {
+          liberarGravacao('toggle-loja', btnToggleLoja);
         }
       };
     }
@@ -549,6 +602,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (formConfig) {
       formConfig.onsubmit = async (e) => {
         e.preventDefault();
+        const botaoSalvar = formConfig.querySelector('[type="submit"]');
+        if (!travarGravacao('config-geral', botaoSalvar)) return;
         const payload = {
           nome: document.getElementById('cfg-nome').value.trim(),
           slogan: document.getElementById('cfg-slogan').value.trim(),
@@ -564,10 +619,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
           await salvarConfiguracoes(payload);
-          mostrarToast('Configurações salvas com sucesso!', 'sucesso');
+          mostrarToast('Salvo no banco ✅ Configurações atualizadas.', 'sucesso');
         } catch (err) {
           console.error("Erro ao salvar configurações:", err);
           mostrarToast('Erro ao salvar configurações.', 'erro');
+        } finally {
+          liberarGravacao('config-geral', botaoSalvar);
         }
       };
     }
@@ -576,6 +633,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (formModelosWhatsapp) {
       formModelosWhatsapp.addEventListener('submit', async (event) => {
         event.preventDefault();
+        const botaoSalvar = formModelosWhatsapp.querySelector('[type="submit"]');
+        if (!travarGravacao('modelos-whatsapp', botaoSalvar)) return;
         const mensagensWhatsapp = {};
         document.querySelectorAll('[data-status-modelo]').forEach((textarea) => {
           mensagensWhatsapp[textarea.dataset.statusModelo] = textarea.value.trim();
@@ -586,10 +645,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           await salvarConfiguracoes({ mensagensWhatsapp, statusWhatsappAutomaticos });
           currentConfig = { ...currentConfig, mensagensWhatsapp, statusWhatsappAutomaticos };
           preencherFormConfig(currentConfig);
-          mostrarToast('Modelos e avisos automáticos salvos no banco.', 'sucesso');
+          mostrarToast('Salvo no banco ✅ Modelos e avisos automáticos atualizados.', 'sucesso');
         } catch (error) {
           console.error('Erro ao salvar os modelos do WhatsApp:', error);
           mostrarToast('Não foi possível salvar. Verifique a conexão e a permissão de administrador.', 'erro', 6000);
+        } finally {
+          liberarGravacao('modelos-whatsapp', botaoSalvar);
         }
       });
     }
@@ -597,6 +658,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnRestaurarModelos = document.getElementById('btn-resetar-modelos-whatsapp');
     if (btnRestaurarModelos) {
       btnRestaurarModelos.addEventListener('click', async () => {
+        if (!travarGravacao('restaurar-modelos', btnRestaurarModelos)) return;
         try {
           const statusWhatsappAutomaticos = [...STATUS_WHATSAPP_AUTOMATICOS_PADRAO];
           await salvarConfiguracoes({
@@ -609,10 +671,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             statusWhatsappAutomaticos
           };
           preencherFormConfig(currentConfig);
-          mostrarToast('Modelos padrão restaurados e salvos.', 'sucesso');
+          mostrarToast('Salvo no banco ✅ Modelos padrão restaurados.', 'sucesso');
         } catch (error) {
           console.error('Erro ao restaurar modelos:', error);
           mostrarToast('Não foi possível restaurar os modelos.', 'erro');
+        } finally {
+          liberarGravacao('restaurar-modelos', btnRestaurarModelos);
+        }
+      });
+    }
+
+    const btnMigrarDados = document.getElementById('btn-migrar-dados-firebase');
+    if (btnMigrarDados) {
+      btnMigrarDados.addEventListener('click', async () => {
+        if (!confirm('Enviar os dados antigos deste aparelho? Configurações sobrescrevem apenas o seed padrão; categorias e produtos equivalentes são atualizados, clientes/pedidos existentes são preservados e não duplicados.')) return;
+        btnMigrarDados.disabled = true;
+        const resultado = document.getElementById('resultado-migracao-firebase');
+        if (resultado) resultado.textContent = 'Enviando dados para o banco...';
+        try {
+          const contagem = await migrarDadosLocaisParaFirebase();
+          const resumo = `Migração concluída: ${contagem.configuracoes} configurações, ${contagem.categorias} categorias, ${contagem.produtos} produtos, ${contagem.clientes} clientes e ${contagem.pedidos} pedidos enviados; ${contagem.ignorados} registros já existentes ignorados.`;
+          if (resultado) resultado.textContent = resumo;
+          mostrarToast('Migração concluída e confirmada pelo Firebase.', 'sucesso', 7000);
+        } catch (erro) {
+          console.error('Falha ao migrar dados deste aparelho:', erro);
+          if (resultado) resultado.textContent = `Falha na migração: ${erro.message}`;
+          mostrarToast(`Migração não concluída: ${erro.message}`, 'erro', 8000);
+        } finally {
+          btnMigrarDados.disabled = false;
         }
       });
     }
@@ -624,6 +710,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (formCores) {
       formCores.onsubmit = async (e) => {
         e.preventDefault();
+        const botaoSalvar = formCores.querySelector('[type="submit"]');
+        if (!travarGravacao('cores', botaoSalvar)) return;
         const novasCores = {
           primary: document.getElementById('cor-primary').value,
           primaryDark: document.getElementById('cor-primaryDark').value,
@@ -638,10 +726,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           await salvarConfiguracoes({ cores: novasCores });
           aplicarCoresCss(novasCores);
-          mostrarToast('Paleta de cores salva com sucesso!', 'sucesso');
+          mostrarToast('Salvo no banco ✅ Paleta de cores atualizada.', 'sucesso');
         } catch (err) {
           console.error("Erro ao salvar cores:", err);
           mostrarToast('Erro ao salvar cores.', 'erro');
+        } finally {
+          liberarGravacao('cores', botaoSalvar);
         }
       };
 
@@ -657,14 +747,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const btnResetCores = document.getElementById('btn-resetar-cores');
       if (btnResetCores) {
         btnResetCores.onclick = async () => {
+          if (!travarGravacao('restaurar-cores', btnResetCores)) return;
           try {
             await salvarConfiguracoes({ cores: CONFIG_PADRAO.cores });
             preencherFormConfig({ ...currentConfig, cores: CONFIG_PADRAO.cores });
             aplicarCoresCss(CONFIG_PADRAO.cores);
-            mostrarToast('Cores restauradas para o padrão!', 'info');
+            mostrarToast('Salvo no banco ✅ Cores restauradas para o padrão.', 'sucesso');
           } catch (e) {
             console.error("Erro ao restaurar cores:", e);
             mostrarToast('Erro ao restaurar cores.', 'erro');
+          } finally {
+            liberarGravacao('restaurar-cores', btnResetCores);
           }
         };
       }
@@ -934,7 +1027,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="pedido-cliente-bloco">
             <strong>👤 ${sanitizarTexto(pedido.cliente?.nome || 'Cliente')}</strong><br>
             📱 ${sanitizarTexto(pedido.cliente?.telefone || '')}<br>
-            📍 <strong>Tipo:</strong> ${pedido.tipo === 'entrega' ? '🛵 Entrega' : '🛍️ Retirada na Praça da quadra'}<br>
+            📍 <strong>Tipo:</strong> ${pedido.tipo === 'entrega' ? '🛵 Entrega' : `🛍️ Retirada em ${sanitizarTexto(currentConfig.local || '')}`}<br>
             ${pedido.tipo === 'entrega' ? `🏠 <strong>Endereço:</strong> ${sanitizarTexto(pedido.cliente?.endereco || '')}<br>` : ''}
             ${pedido.cliente?.referencia ? `🎯 <strong>Ref:</strong> ${sanitizarTexto(pedido.cliente.referencia)}<br>` : ''}
             💳 <strong>Pagamento:</strong> ${pedido.pagamento?.forma === 'dinheiro' ? `Dinheiro (Troco: ${pedido.pagamento.trocoPara ? formatarMoeda(pedido.pagamento.trocoPara) : 'Não'})` : pedido.pagamento?.forma === 'pix' ? 'Pix' : 'Cartão na entrega'}
@@ -1114,6 +1207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (formCat) {
       formCat.onsubmit = async (e) => {
         e.preventDefault();
+        const botaoSalvar = formCat.querySelector('[type="submit"]');
         const id = document.getElementById('modal-cat-id').value;
         const nomeValor = document.getElementById('cat-nome').value.trim();
 
@@ -1128,13 +1222,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           ativa: document.getElementById('cat-ativa').checked
         };
 
+        if (!travarGravacao('categoria', botaoSalvar)) return;
         try {
           await salvarCategoria(categoriaData, id || null);
           modalCat.classList.remove('ativo');
-          mostrarToast(id ? 'Categoria atualizada com sucesso!' : 'Categoria criada com sucesso!', 'sucesso');
+          mostrarToast(id ? 'Salvo no banco ✅ Categoria atualizada.' : 'Salvo no banco ✅ Categoria criada.', 'sucesso');
         } catch (err) {
           console.error("Erro ao salvar categoria:", err);
           mostrarToast('Erro ao salvar categoria.', 'erro');
+        } finally {
+          liberarGravacao('categoria', botaoSalvar);
         }
       };
     }
@@ -1162,6 +1259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (formProd) {
       formProd.onsubmit = async (e) => {
         e.preventDefault();
+        const botaoSalvar = formProd.querySelector('[type="submit"]');
         const id = document.getElementById('modal-prod-id').value;
         const precoPromoValor = document.getElementById('prod-preco-promo').value;
         const nomeProd = document.getElementById('prod-nome').value.trim();
@@ -1197,13 +1295,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           destaque: document.getElementById('prod-destaque').checked
         };
 
+        if (!travarGravacao('produto', botaoSalvar)) return;
         try {
           await salvarProduto(produtoData, id || null);
           modalProd.classList.remove('ativo');
-          mostrarToast(id ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!', 'sucesso');
+          mostrarToast(id ? 'Salvo no banco ✅ Produto atualizado.' : 'Salvo no banco ✅ Produto cadastrado.', 'sucesso');
         } catch (err) {
           console.error("Erro ao salvar produto:", err);
           mostrarToast('Erro ao salvar produto.', 'erro');
+        } finally {
+          liberarGravacao('produto', botaoSalvar);
         }
       };
     }
@@ -1237,14 +1338,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
 
     confirmarExcluirCategoria: async (id, nome) => {
-      if (confirm(`Tem certeza que deseja excluir a categoria "${nome}"?`)) {
-        try {
+      const chaveGravacao = `excluir-categoria:${id}`;
+      if (!travarGravacao(chaveGravacao)) return;
+      try {
+        if (confirm(`Tem certeza que deseja excluir a categoria "${nome}"?`)) {
           await excluirCategoria(id);
-          mostrarToast(`Categoria "${nome}" excluída com sucesso.`, 'sucesso');
-        } catch (e) {
-          console.error("Erro ao excluir categoria:", e);
-          mostrarToast('Erro ao excluir categoria.', 'erro');
+          mostrarToast(`Salvo no banco ✅ Categoria "${nome}" excluída.`, 'sucesso');
         }
+      } catch (e) {
+        console.error("Erro ao excluir categoria:", e);
+        mostrarToast('Erro ao excluir categoria.', 'erro');
+      } finally {
+        liberarGravacao(chaveGravacao);
       }
     },
 
@@ -1266,27 +1371,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
 
     confirmarExcluirProduto: async (id, nome) => {
-      if (confirm(`Tem certeza que deseja excluir o produto "${nome}"?`)) {
-        try {
+      const chaveGravacao = `excluir-produto:${id}`;
+      if (!travarGravacao(chaveGravacao)) return;
+      try {
+        if (confirm(`Tem certeza que deseja excluir o produto "${nome}"?`)) {
           await excluirProduto(id);
-          mostrarToast(`Produto "${nome}" excluído com sucesso.`, 'sucesso');
-        } catch (e) {
-          console.error("Erro ao excluir produto:", e);
-          mostrarToast('Erro ao excluir produto.', 'erro');
+          mostrarToast(`Salvo no banco ✅ Produto "${nome}" excluído.`, 'sucesso');
         }
+      } catch (e) {
+        console.error("Erro ao excluir produto:", e);
+        mostrarToast('Erro ao excluir produto.', 'erro');
+      } finally {
+        liberarGravacao(chaveGravacao);
       }
     },
 
     mudarStatusPedido: async (id, novoStatus) => {
-      let opcoes = {};
-      if (novoStatus === 'Cancelado') {
-        const motivo = prompt('Informe o motivo do cancelamento (opcional):');
-        if (motivo === null) return;
-        if (!confirm('Confirma o cancelamento deste pedido?')) return;
-        if (motivo.trim()) opcoes.motivoCancelamento = motivo.trim();
-      }
-
+      const chaveGravacao = `status-pedido:${id}`;
+      if (!travarGravacao(chaveGravacao)) return;
       try {
+        const opcoes = {};
+        if (novoStatus === 'Cancelado') {
+          const motivo = prompt('Informe o motivo do cancelamento (opcional):');
+          if (motivo === null) return;
+          if (!confirm('Confirma o cancelamento deste pedido?')) return;
+          if (motivo.trim()) opcoes.motivoCancelamento = motivo.trim();
+        }
         await atualizarStatusPedido(id, novoStatus, opcoes);
         const pedido = currentPedidos.find((item) => item.id === id);
         if (pedido) {
@@ -1306,14 +1416,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             : STATUS_WHATSAPP_AUTOMATICOS_PADRAO;
           if (avisosAutomaticos.includes(novoStatus)) abrirDialogoAvisoPedido(id);
         }
-        mostrarToast(`Status do pedido atualizado para "${novoStatus}"!`, 'sucesso');
+        mostrarToast(`Salvo no banco ✅ Status do pedido: "${novoStatus}".`, 'sucesso');
       } catch (e) {
         console.error("Erro ao atualizar status do pedido:", e);
         mostrarToast(e.code === 'PERMISSION_DENIED' ? 'Sem permissão para atualizar este pedido. Verifique a autenticação e as regras do Firebase.' : 'Erro ao atualizar status do pedido. Tente novamente.', 'erro', 6000);
+      } finally {
+        liberarGravacao(chaveGravacao);
       }
     },
 
     salvarEstimativaPedido: async (id) => {
+      const chaveGravacao = `estimativa-pedido:${id}`;
+      const botaoSalvar = document.querySelector(`.pedido-card[data-id="${id}"] .admin-pedido-estimativa button`);
+      if (!travarGravacao(chaveGravacao, botaoSalvar)) return;
       const estimativa = document.getElementById(`estimativa-${id}`)?.value.trim() || '';
       try {
         await salvarEstimativaPedido(id, estimativa);
@@ -1322,10 +1437,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           pedido.estimativa = estimativa;
           renderizarPedidos();
         }
-        mostrarToast('Previsão do pedido atualizada.', 'sucesso');
+        mostrarToast('Salvo no banco ✅ Previsão do pedido atualizada.', 'sucesso');
       } catch (e) {
         console.error('Erro ao salvar previsão do pedido:', e);
         mostrarToast('Não foi possível salvar a previsão. Verifique sua conexão e tente novamente.', 'erro');
+      } finally {
+        liberarGravacao(chaveGravacao, botaoSalvar);
       }
     },
 

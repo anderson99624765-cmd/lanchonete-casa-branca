@@ -9,13 +9,12 @@ import {
   assinarPedidoPublico,
   atualizarPedidoRecente,
   obterPedidosRecentes,
+  assinarConexaoFirebase,
   buscarClientePorTelefone,
-  verificarEExecutarSeed,
-  conexaoValida 
 } from "./modules/firebase-service.js";
-import { CONFIG_PADRAO } from "./modules/firebase-config.js";
 import { carrinhoService } from "./modules/carrinho.js";
 import { CardapioView } from "./modules/cardapio.js";
+import { normalizarTelefoneWhatsApp } from "./notificacoes.js";
 import { aplicarCoresCss, mascaraTelefone, limparTelefone, mostrarToast } from "./modules/utils.js";
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -24,38 +23,96 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cardapioView = new CardapioView();
   window.cardapioView = cardapioView;
 
-  let currentConfig = CONFIG_PADRAO;
+  let currentConfig = null;
   let currentCategorias = [];
   let currentProdutos = [];
+  const listeners = [];
+  const elEstadoBanco = document.getElementById('app-database-status');
+  const errosLeitura = new Map();
+  let bancoConectado = false;
+
+  function atualizarAvisoBanco() {
+    if (!elEstadoBanco) return;
+    elEstadoBanco.hidden = bancoConectado && errosLeitura.size === 0;
+    if (!bancoConectado) {
+      elEstadoBanco.textContent = '🔴 Sem conexão com o banco de dados. O cardápio será exibido assim que a conexão voltar.';
+    } else if (errosLeitura.size) {
+      const detalhes = [...errosLeitura.entries()].map(([fonte, erro]) => `${fonte}: ${erro}`).join('; ');
+      elEstadoBanco.textContent = `🟠 Conectado ao Firebase, mas há dados indisponíveis: ${detalhes}`;
+    } else {
+      elEstadoBanco.textContent = '';
+    }
+  }
+
+  function registrarErroLeitura(fonte, erro) {
+    console.error(`Não foi possível ler ${fonte} do Firebase:`, erro);
+    errosLeitura.set(fonte, erro.message || 'erro desconhecido');
+    atualizarAvisoBanco();
+    if (fonte === 'configurações') {
+      const seloLoja = document.getElementById('selo-status-loja');
+      const textoSelo = document.getElementById('selo-status-texto');
+      if (seloLoja) seloLoja.className = 'selo-status-loja fechado';
+      if (textoSelo) textoSelo.textContent = 'Dados da loja indisponíveis';
+    }
+    if (currentProdutos.length === 0 && cardapioView.elGridProdutos) {
+      cardapioView.elGridProdutos.textContent = 'Cardápio indisponível. Verifique a conexão e tente novamente.';
+    }
+  }
 
   configurarBannerAcompanhamento();
 
-  // 1. Executa seed de inicialização
-  await verificarEExecutarSeed();
+  listeners.push(assinarConexaoFirebase((conectado) => {
+    bancoConectado = conectado;
+    if (!conectado && !currentConfig) {
+      const seloLoja = document.getElementById('selo-status-loja');
+      const textoSelo = document.getElementById('selo-status-texto');
+      if (seloLoja) seloLoja.className = 'selo-status-loja fechado';
+      if (textoSelo) textoSelo.textContent = 'Banco indisponível';
+      if (currentProdutos.length === 0 && cardapioView.elGridProdutos) {
+        cardapioView.elGridProdutos.textContent = 'Cardápio indisponível. Verifique a conexão e tente novamente.';
+      }
+    }
+    atualizarAvisoBanco();
+  }));
 
   // 2. Listener das Configurações do Site em tempo real
-  assinarConfiguracoes((config) => {
-    currentConfig = { ...CONFIG_PADRAO, ...config };
+  listeners.push(assinarConfiguracoes((config) => {
+    if (!config) return;
+    errosLeitura.delete('configurações');
+    atualizarAvisoBanco();
+    currentConfig = config;
     atualizarCabecalhoETextos(currentConfig);
     aplicarCoresCss(currentConfig.cores);
     carrinhoService.setConfig(currentConfig);
     cardapioView.setDados(currentCategorias, currentProdutos, currentConfig);
-  });
+  }, (erro) => {
+    registrarErroLeitura('configurações', erro);
+  }));
 
   // 3. Listener das Categorias em tempo real
-  assinarCategorias((categorias) => {
+  listeners.push(assinarCategorias((categorias) => {
+    errosLeitura.delete('categorias');
+    atualizarAvisoBanco();
     currentCategorias = categorias || [];
-    cardapioView.setDados(currentCategorias, currentProdutos, currentConfig);
-  });
+    if (currentConfig) cardapioView.setDados(currentCategorias, currentProdutos, currentConfig);
+  }, (erro) => {
+    registrarErroLeitura('categorias', erro);
+  }));
 
   // 4. Listener dos Produtos em tempo real
-  assinarProdutos((produtos) => {
+  listeners.push(assinarProdutos((produtos) => {
+    errosLeitura.delete('produtos');
+    atualizarAvisoBanco();
     currentProdutos = produtos || [];
-    cardapioView.setDados(currentCategorias, currentProdutos, currentConfig);
-  });
+    carrinhoService.sincronizarProdutosOnline(currentProdutos);
+    if (currentConfig) cardapioView.setDados(currentCategorias, currentProdutos, currentConfig);
+  }, (erro) => {
+    registrarErroLeitura('produtos', erro);
+  }));
 
   // 5. Configuração dos Eventos da UI (Carrinho, Modais, Cadastro)
   configurarEventosUI();
+  window.addEventListener('pagehide', () => listeners.forEach((unsubscribe) => unsubscribe()), { once: true });
 
   function configurarBannerAcompanhamento() {
     const recentes = obterPedidosRecentes();
@@ -99,19 +156,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const elLocal = document.getElementById('loja-local-texto');
     const elWhats = document.getElementById('loja-whats-link');
     const elWhatsTexto = document.getElementById('loja-whats-texto');
+    const numeroWhatsApp = normalizarTelefoneWhatsApp(config.whatsapp);
     const elSelo = document.getElementById('selo-status-loja');
     const elSeloTexto = document.getElementById('selo-status-texto');
     const elAvisoFechado = document.getElementById('aviso-loja-fechada');
 
-    if (elNome) elNome.textContent = config.nome || "Lanchonete Casa Branca";
-    if (elSlogan) elSlogan.textContent = config.slogan || "O sabor que faz você se sentir em casa.";
-    if (elLocal) elLocal.textContent = config.local || "Praça da quadra";
+    if (elNome) elNome.textContent = config.nome || '';
+    if (elSlogan) elSlogan.textContent = config.slogan || '';
+    if (elLocal) elLocal.textContent = config.local || '';
 
-    if (elWhats && elWhatsTexto) {
-      const tel = config.whatsappFormatado || config.whatsapp || "(74) 99917-7156";
+    if (elWhats && elWhatsTexto && numeroWhatsApp) {
+      const tel = config.whatsappFormatado || config.whatsapp;
       elWhatsTexto.textContent = tel;
-      elWhats.href = `https://wa.me/55${limparTelefone(config.whatsapp || "74999177156")}`;
+      elWhats.href = `https://wa.me/${numeroWhatsApp}`;
+      elWhats.hidden = false;
+    } else if (elWhats) {
+      elWhats.hidden = true;
+      elWhats.removeAttribute('href');
     }
+
+    const nomeFooter = document.getElementById('loja-nome-footer');
+    const sloganFooter = document.getElementById('loja-slogan-footer');
+    const localFooter = document.getElementById('loja-local-footer');
+    const whatsFooter = document.getElementById('loja-whats-footer');
+    const localRetirada = document.getElementById('retirada-local-mini');
+    if (nomeFooter) nomeFooter.textContent = config.nome || '';
+    if (sloganFooter) sloganFooter.textContent = config.slogan || '';
+    if (localFooter) localFooter.textContent = config.local || '';
+    if (whatsFooter) whatsFooter.textContent = config.whatsappFormatado || config.whatsapp || '';
+    if (localRetirada) localRetirada.textContent = config.local ? `(${config.local})` : '';
 
     // Status Aberto ou Fechado
     if (config.aberto) {
@@ -138,23 +211,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modalCarrinho = document.getElementById('modal-carrinho');
     const btnFecharModal = document.getElementById('btn-fechar-modal-carrinho');
 
-    if (btnFloat && modalCarrinho) {
-      btnFloat.addEventListener('click', () => {
+    if (modalCarrinho) {
+      let focoAnterior = null;
+      const FOCAVEIS = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+
+      const abrirCarrinho = () => {
+        focoAnterior = document.activeElement;
         modalCarrinho.classList.add('ativo');
         document.body.style.overflow = 'hidden';
-      });
-    }
+        if (btnFecharModal) btnFecharModal.focus();
+      };
 
-    if (btnFecharModal && modalCarrinho) {
-      btnFecharModal.addEventListener('click', () => {
+      const fecharCarrinho = () => {
         modalCarrinho.classList.remove('ativo');
         document.body.style.overflow = '';
+        if (focoAnterior && typeof focoAnterior.focus === 'function') focoAnterior.focus();
+      };
+
+      if (btnFloat) btnFloat.addEventListener('click', abrirCarrinho);
+      if (btnFecharModal) btnFecharModal.addEventListener('click', fecharCarrinho);
+      modalCarrinho.addEventListener('click', (e) => {
+        if (e.target === modalCarrinho) fecharCarrinho();
       });
 
-      modalCarrinho.addEventListener('click', (e) => {
-        if (e.target === modalCarrinho) {
-          modalCarrinho.classList.remove('ativo');
-          document.body.style.overflow = '';
+      // Esc fecha a sacola e o Tab fica preso dentro dela enquanto estiver aberta
+      document.addEventListener('keydown', (e) => {
+        if (!modalCarrinho.classList.contains('ativo')) return;
+        if (e.key === 'Escape') {
+          fecharCarrinho();
+          return;
+        }
+        if (e.key !== 'Tab') return;
+        const focaveis = [...modalCarrinho.querySelectorAll(FOCAVEIS)].filter((el) => el.offsetParent !== null);
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (e.shiftKey && document.activeElement === primeiro) {
+          e.preventDefault();
+          ultimo.focus();
+        } else if (!e.shiftKey && document.activeElement === ultimo) {
+          e.preventDefault();
+          primeiro.focus();
         }
       });
     }
@@ -241,8 +338,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               }
               mostrarToast(`Bem-vindo(a) de volta, ${clienteCadastrado.nome.split(' ')[0]}!`, 'info');
             }
-          } catch (err) {
-            console.warn("Consulta de cliente:", err);
+            } catch (err) {
+            console.error("Falha na consulta de cliente no Firebase:", err);
+            mostrarToast('Não foi possível consultar os dados do cliente no banco. Tente novamente.', 'erro');
           }
         }
       });

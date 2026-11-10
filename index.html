@@ -23,9 +23,9 @@
       
       <!-- Barra Superior: Selo de Aberto/Fechado e Acesso Admin -->
       <div class="header-meta-bar">
-        <div id="selo-status-loja" class="selo-status-loja aberto" aria-live="polite">
+        <div id="selo-status-loja" class="selo-status-loja fechado" aria-live="polite">
           <span class="status-dot"></span>
-          <span id="selo-status-texto">Aberto agora</span>
+          <span id="selo-status-texto">Conectando ao banco...</span>
         </div>
 
         <a href="admin.html" class="link-admin-topo" title="Acessar o Painel do Administrador">
@@ -69,25 +69,27 @@
         </svg>
 
         <span class="brand-pre-title">LANCHONETE</span>
-        <h1 class="brand-main-title" id="loja-nome">Casa Branca</h1>
-        <p class="brand-slogan" id="loja-slogan">"O sabor que faz você se sentir em casa."</p>
+        <h1 class="brand-main-title" id="loja-nome">Carregando...</h1>
+        <p class="brand-slogan" id="loja-slogan"></p>
       </div>
 
       <!-- Pílulas Informativas de Localização e Pedido Rápido -->
       <div class="info-badges-row">
         <span class="info-pill" title="Localização">
-          📍 <span id="loja-local-texto">Praça da quadra</span>
+          📍 <span id="loja-local-texto"></span>
         </span>
         <span class="info-pill" title="Modalidades de Atendimento">
           🛵 Delivery & 🛍️ Retirada
         </span>
-        <a id="loja-whats-link" href="https://wa.me/5574999177156" target="_blank" class="info-pill info-pill-link" title="Fale conosco no WhatsApp">
-          📱 <span id="loja-whats-texto">(74) 99917-7156</span>
+        <a id="loja-whats-link" href="#" target="_blank" rel="noopener" class="info-pill info-pill-link" title="Fale conosco no WhatsApp" hidden>
+          📱 <span id="loja-whats-texto"></span>
         </a>
       </div>
 
     </div>
   </header>
+
+  <div id="app-database-status" class="database-status database-status-error" role="status" aria-live="polite" hidden></div>
 
   <!-- Banner de Aviso Loja Fechada -->
   <div id="aviso-loja-fechada" class="aviso-loja-fechada" role="alert">
@@ -162,15 +164,15 @@
       <div class="modal-body">
         
         <!-- Seletor: Entrega vs Retirada -->
-        <div>
-          <label class="form-label">Como deseja receber seu pedido?</label>
+        <div role="group" aria-labelledby="label-tipo-pedido">
+          <span id="label-tipo-pedido" class="form-label">Como deseja receber seu pedido?</span>
           <div class="seletor-tipo-pedido">
             <button type="button" id="btn-opt-entrega" class="btn-tipo-opcao ativo" data-tipo="entrega">
               <span>🛵 Entrega em Casa</span>
             </button>
             <button type="button" id="btn-opt-retirada" class="btn-tipo-opcao" data-tipo="retirada">
               <span>🛍️ Retirar no Local</span>
-              <small style="font-size: 0.75rem; font-weight: normal;">(Praça da quadra)</small>
+              <small id="retirada-local-mini" style="font-size: 0.75rem; font-weight: normal;"></small>
             </button>
           </div>
         </div>
@@ -252,7 +254,7 @@
 
         <!-- Seção: Forma de Pagamento -->
         <section class="secao-pagamento" aria-labelledby="titulo-pagamento">
-          <label id="titulo-pagamento" class="form-label">Forma de Pagamento</label>
+          <span id="titulo-pagamento" class="form-label">Forma de Pagamento</span>
           <div class="grid-pagamento-opcoes">
             <button type="button" class="btn-pag-opcao ativo" data-pag="pix">
               💠 Pix
@@ -314,12 +316,12 @@
        ====================================================================== -->
   <footer class="footer-site">
     <div class="footer-container">
-      <div class="footer-logo">Lanchonete Casa Branca</div>
-      <p class="footer-slogan">"O sabor que faz você se sentir em casa."</p>
+      <div class="footer-logo" id="loja-nome-footer"></div>
+      <p class="footer-slogan" id="loja-slogan-footer"></p>
       <p class="footer-detalhes">
-        📍 Praça da quadra<br>
+        📍 <span id="loja-local-footer"></span><br>
         🛵 Delivery rápido & 🛍️ Retirada no balcão<br>
-        WhatsApp Oficial: (74) 99917-7156
+        <span id="loja-whats-footer"></span>
       </p>
       <p class="footer-copyright">
         © 2026 Lanchonete Casa Branca. Todos os direitos reservados.

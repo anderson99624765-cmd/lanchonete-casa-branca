@@ -1,9 +1,11 @@
 import {
   assinarPedidoPublico,
+  assinarConfiguracoes,
   atualizarPedidoRecente,
   obterPedidosRecentes
 } from "./modules/firebase-service.js";
 import { formatarMoeda, limparTelefone, tocarAlertaSonoro } from "./modules/utils.js";
+import { normalizarTelefoneWhatsApp } from "./notificacoes.js";
 
 const statusEl = document.getElementById('tracking-state');
 const orderSection = document.getElementById('tracking-order');
@@ -13,6 +15,8 @@ const query = new URLSearchParams(window.location.search);
 const pedidoId = query.get('pedido');
 const listeners = [];
 let ultimoStatus = null;
+let configuracaoPublica = null;
+let pedidoAtual = null;
 
 const etapasPorTipo = {
   entrega: [
@@ -57,12 +61,28 @@ function obterHistorico(pedido) {
 }
 
 function registrarMudanca(status) {
-  if (ultimoStatus !== null && ultimoStatus !== status) {
-    document.getElementById('tracking-state').textContent = `Atualização: ${mensagensStatus[status] || `O status mudou para ${status}.`}`;
+  const mudou = ultimoStatus !== null && ultimoStatus !== status;
+  if (mudou) {
+    mostrarEstado(`Atualização: ${mensagensStatus[status] || `O status mudou para ${status}.`}`);
     tocarAlertaSonoro();
     if (navigator.vibrate) navigator.vibrate(120);
   }
   ultimoStatus = status;
+  return mudou;
+}
+
+function atualizarContatoDaLoja() {
+  const cabecalho = document.getElementById('tracking-brand-name');
+  const botaoWhatsApp = document.getElementById('tracking-whatsapp');
+  if (cabecalho) cabecalho.textContent = configuracaoPublica?.nome || 'Dados da loja indisponíveis';
+  const telefone = normalizarTelefoneWhatsApp(configuracaoPublica?.whatsapp);
+  if (!telefone || !pedidoAtual || !botaoWhatsApp) {
+    if (botaoWhatsApp) botaoWhatsApp.hidden = true;
+    return;
+  }
+  const mensagem = encodeURIComponent(`Olá! Preciso de ajuda com o pedido #${pedidoAtual.numero} da ${configuracaoPublica.nome}.`);
+  botaoWhatsApp.href = `https://wa.me/${telefone}?text=${mensagem}`;
+  botaoWhatsApp.hidden = false;
 }
 
 function renderizarTimeline(pedido) {
@@ -76,9 +96,14 @@ function renderizarTimeline(pedido) {
   etapas.forEach((etapa, indice) => {
     const item = document.createElement('li');
     item.className = 'tracking-step';
-    if (status !== 'Cancelado' && indiceAtual >= 0 && indice < indiceAtual) item.classList.add('is-complete');
-    if (status !== 'Cancelado' && indice === indiceAtual) item.classList.add('is-current');
-    item.setAttribute('aria-label', `${etapa.status}${indice < indiceAtual ? ', concluída' : indice === indiceAtual ? ', etapa atual' : ', próxima etapa'}`);
+    const finalizado = ['Entregue', 'Retirado'].includes(status);
+    const ativo = status !== 'Cancelado' && indiceAtual >= 0;
+    // Quando o pedido termina, a última etapa fica verde (concluída) em vez de amarela pulsando.
+    const concluida = ativo && (indice < indiceAtual || (finalizado && indice === indiceAtual));
+    const atual = ativo && indice === indiceAtual && !finalizado;
+    if (concluida) item.classList.add('is-complete');
+    if (atual) item.classList.add('is-current');
+    item.setAttribute('aria-label', `${etapa.status}${concluida ? ', concluída' : atual ? ', etapa atual' : ', próxima etapa'}`);
 
     const icone = document.createElement('span');
     icone.className = 'tracking-step-icon';
@@ -106,16 +131,18 @@ function renderizarPedido(pedido) {
     return;
   }
 
-  registrarMudanca(pedido.status);
+  const mudouStatus = registrarMudanca(pedido.status);
+  pedidoAtual = pedido;
+  atualizarContatoDaLoja();
   atualizarPedidoRecente(pedido);
-  mostrarEstado('Pedido atualizado em tempo real.');
+  if (!mudouStatus) mostrarEstado('Pedido atualizado em tempo real.');
   orderSection.hidden = false;
   recentSection.hidden = true;
 
   document.getElementById('tracking-number').textContent = `#${pedido.numero || '—'}`;
   document.getElementById('tracking-date').textContent = `Recebido em ${formatarData(pedido.criadoEm)}`;
   document.getElementById('tracking-type').textContent = pedido.tipo === 'retirada' ? 'Retirada' : 'Entrega';
-  document.getElementById('tracking-announcement').textContent = mensagensStatus[pedido.status] || mensagensStatus[pedido.status === 'Novo' ? 'Recebido' : 'Recebido'];
+  document.getElementById('tracking-announcement').textContent = mensagensStatus[pedido.status === 'Novo' ? 'Recebido' : pedido.status] || mensagensStatus.Recebido;
   document.getElementById('tracking-announcement').classList.toggle('is-cancelled', pedido.status === 'Cancelado');
 
   const concluido = ['Entregue', 'Retirado'].includes(pedido.status);
@@ -125,9 +152,6 @@ function renderizarPedido(pedido) {
   document.getElementById('tracking-cancel-reason').hidden = pedido.status !== 'Cancelado' || !pedido.motivoCancelamento;
   document.getElementById('tracking-cancel-reason').textContent = pedido.motivoCancelamento ? `Motivo: ${pedido.motivoCancelamento}` : '';
   document.getElementById('tracking-new-order').hidden = !concluido;
-
-  const mensagemWhatsApp = encodeURIComponent(`Olá! Preciso de ajuda com o pedido #${pedido.numero} da Lanchonete Casa Branca.`);
-  document.getElementById('tracking-whatsapp').href = `https://wa.me/5574999177156?text=${mensagemWhatsApp}`;
 
   const itens = document.getElementById('tracking-items');
   itens.replaceChildren();
@@ -219,6 +243,15 @@ window.addEventListener('online', () => {
   window.setTimeout(() => { document.getElementById('tracking-network').hidden = true; }, 2500);
 });
 window.addEventListener('pagehide', () => listeners.forEach((unsubscribe) => unsubscribe()), { once: true });
+
+listeners.push(assinarConfiguracoes((config) => {
+  configuracaoPublica = config;
+  document.title = `Acompanhar pedido | ${config.nome || ''}`;
+  atualizarContatoDaLoja();
+}, (erro) => {
+  console.error('Falha ao carregar dados da loja para o acompanhamento:', erro);
+  mostrarEstado('Não foi possível carregar os dados da loja. Verifique a conexão.');
+}));
 
 if (pedidoId) acompanhar(pedidoId);
 else renderizarRecentes();

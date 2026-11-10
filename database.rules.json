@@ -1,106 +1,191 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "config": {
       ".read": true,
-      ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'"
+      ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+      ".validate": "newData.hasChildren(['nome', 'aberto', 'entregaAtiva', 'retiradaAtiva', 'taxaAtiva', 'taxaValor', 'minimoEntrega', 'cores'])",
+      "nome": { ".validate": "newData.isString() && newData.val().length <= 120" },
+      "slogan": { ".validate": "newData.isString() && newData.val().length <= 240" },
+      "whatsapp": { ".validate": "newData.isString() && newData.val().matches(/^\\d{10,13}$/)" },
+      "whatsappFormatado": { ".validate": "newData.isString() && newData.val().length <= 24" },
+      "local": { ".validate": "newData.isString() && newData.val().length <= 160" },
+      "aberto": { ".validate": "newData.isBoolean()" },
+      "entregaAtiva": { ".validate": "newData.isBoolean()" },
+      "retiradaAtiva": { ".validate": "newData.isBoolean()" },
+      "taxaAtiva": { ".validate": "newData.isBoolean()" },
+      "taxaValor": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+      "minimoEntrega": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+      "modoDestaque": { ".validate": "newData.isString() && (newData.val() == 'promocoes' || newData.val() == 'destaques')" },
+      "__seedDefault": { ".validate": "newData.isBoolean()" },
+      "cores": {
+        ".validate": "newData.hasChildren(['primary', 'primaryDark', 'bgCream', 'cardCream', 'greenOpen', 'yellowGold', 'orangeTerra', 'textLight'])",
+        "$cor": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f]{6}$/)" }
+      },
+      "mensagensWhatsapp": {
+        "$status": {
+          ".validate": "( $status == 'Recebido' || $status == 'Em preparo' || $status == 'Saiu para entrega' || $status == 'Pronto para retirada' || $status == 'Entregue' || $status == 'Retirado' || $status == 'Cancelado' ) && newData.isString() && newData.val().length <= 2000"
+        }
+      },
+      "statusWhatsappAutomaticos": {
+        ".validate": "newData.numChildren() <= 7",
+        "$indice": { ".validate": "newData.isString() && (newData.val() == 'Recebido' || newData.val() == 'Em preparo' || newData.val() == 'Saiu para entrega' || newData.val() == 'Pronto para retirada' || newData.val() == 'Entregue' || newData.val() == 'Retirado' || newData.val() == 'Cancelado')" }
+      },
+      "$other": { ".validate": false }
     },
     "categorias": {
       ".read": true,
-      ".write": "auth != null"
+      ".indexOn": ["ordem"],
+      "$categoriaId": {
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+        ".validate": "newData.hasChildren(['nome', 'ordem', 'ativa'])",
+        "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80" },
+        "ordem": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "ativa": { ".validate": "newData.isBoolean()" },
+        "$other": { ".validate": false }
+      }
     },
     "produtos": {
       ".read": true,
-      ".write": "auth != null"
+      "$produtoId": {
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+        ".validate": "newData.hasChildren(['nome', 'preco', 'categoriaId', 'disponivel'])",
+        "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
+        "descricao": { ".validate": "newData.isString() && newData.val().length <= 1000" },
+        "preco": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "precoPromo": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < newData.parent().child('preco').val()" },
+        "categoriaId": { ".validate": "newData.isString() && newData.val().length <= 100 && root.child('categorias').child(newData.val()).exists()" },
+        "foto": { ".validate": "newData.isString() && newData.val().length <= 1000" },
+        "obs": { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "disponivel": { ".validate": "newData.isBoolean()" },
+        "destaque": { ".validate": "newData.isBoolean()" },
+        "$other": { ".validate": false }
+      }
     },
     "clientes": {
-      ".read": "auth != null",
+      ".read": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+      ".indexOn": ["atualizadoEmTimestamp"],
       "$telefone": {
-        ".read": true,
-        ".write": true
+        ".read": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2' || !data.exists()",
+        ".validate": "newData.hasChildren(['nome', 'telefone', 'telefoneLimpo', 'atualizadoEm', 'atualizadoEmTimestamp'])",
+        "nome": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "telefone": { ".validate": "newData.isString() && newData.val().length <= 20" },
+        "telefoneLimpo": { ".validate": "newData.isString() && newData.val() == $telefone && newData.val().matches(/^\\d{10,13}$/)" },
+        "endereco": { ".validate": "newData.isString() && newData.val().length <= 240" },
+        "referencia": { ".validate": "newData.isString() && newData.val().length <= 240" },
+        "atualizadoEm": { ".validate": "newData.isString()" },
+        "atualizadoEmTimestamp": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
       }
     },
     "pedidos": {
-      ".read": "auth != null && auth.token.email == 'casabranca@gmail.com'",
+      ".read": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+      ".indexOn": ["criadoEmTimestamp", "status"],
       "$pedidoId": {
         ".read": true,
-        ".write": "!data.exists()",
-        ".validate": "newData.hasChildren(['numero', 'tipo', 'status', 'criadoEm', 'criadoEmTimestamp', 'itens', 'total', 'pagamento', 'historico'])",
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2' || !data.exists()",
+        ".validate": "newData.hasChildren(['numero', 'tipo', 'status', 'criadoEm', 'criadoEmTimestamp', 'itens', 'subtotal', 'taxa', 'total', 'pagamento', 'historico']) && (data.exists() || auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2' || (newData.child('status').val() == 'Recebido' && !newData.child('estimativa').exists() && !newData.child('motivoCancelamento').exists() && !newData.child('notificacoes').exists() && !newData.child('atualizadoEm').exists()))",
         "numero": { ".validate": "newData.isNumber() && newData.val() > 0" },
         "tipo": { ".validate": "newData.val() == 'entrega' || newData.val() == 'retirada'" },
         "status": {
-          ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'",
-          ".validate": "newData.isString() && (newData.val() == 'Cancelado' || newData.val() == 'Recebido' || newData.val() == 'Em preparo' || (newData.parent().child('tipo').val() == 'entrega' && (newData.val() == 'Saiu para entrega' || newData.val() == 'Entregue')) || (newData.parent().child('tipo').val() == 'retirada' && (newData.val() == 'Pronto para retirada' || newData.val() == 'Retirado')))"
+          ".validate": "newData.isString() && (newData.val() == 'Recebido' || newData.val() == 'Em preparo' || newData.val() == 'Cancelado' || (newData.parent().child('tipo').val() == 'entrega' && (newData.val() == 'Saiu para entrega' || newData.val() == 'Entregue')) || (newData.parent().child('tipo').val() == 'retirada' && (newData.val() == 'Pronto para retirada' || newData.val() == 'Retirado')))"
         },
-        "atualizadoEm": {
-          ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'",
-          ".validate": "newData.isString()"
-        },
-        "criadoEm": { ".validate": "newData.isString()" },
-        "criadoEmTimestamp": { ".validate": "newData.isNumber()" },
-        "total": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "pagamento": { ".validate": "newData.isString()" },
+        "criadoEm": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "criadoEmTimestamp": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "atualizadoEm": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "subtotal": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "taxa": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() == newData.parent().child('subtotal').val() + newData.parent().child('taxa').val()" },
+        "pagamento": { ".validate": "newData.isString() && (newData.val() == 'pix' || newData.val() == 'dinheiro' || newData.val() == 'cartao')" },
         "itens": {
           ".validate": "newData.hasChildren(['0'])",
-          "$itemId": {
-            ".validate": "newData.hasChildren(['nome', 'quantidade', 'precoUnit'])",
-            "nome": { ".validate": "newData.isString() && newData.val().length <= 120" },
-            "quantidade": { ".validate": "newData.isNumber() && newData.val() > 0" },
-            "precoUnit": { ".validate": "newData.isNumber() && newData.val() >= 0" }
+          "$itemIndex": {
+            ".validate": "newData.hasChildren(['id', 'nome', 'quantidade', 'precoUnit'])",
+            "id": { ".validate": "newData.isString() && newData.val().length <= 100 && root.child('produtos').child(newData.val()).exists()" },
+            "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
+            "quantidade": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100" },
+            "precoUnit": { ".validate": "newData.isNumber() && newData.val() >= 0 && (newData.val() == root.child('produtos').child(newData.parent().child('id').val()).child('preco').val() || (root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').isNumber() && root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').val() > 0 && root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').val() < root.child('produtos').child(newData.parent().child('id').val()).child('preco').val() && newData.val() == root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').val()))" },
+            "$other": { ".validate": false }
           }
         },
         "historico": {
           "$eventoId": {
-            ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'",
-            ".validate": "newData.hasChildren(['status', 'dataHora']) && newData.child('status').isString() && newData.child('dataHora').isString() && (newData.child('status').val() == 'Recebido' || newData.child('status').val() == 'Em preparo' || newData.child('status').val() == 'Saiu para entrega' || newData.child('status').val() == 'Entregue' || newData.child('status').val() == 'Pronto para retirada' || newData.child('status').val() == 'Retirado' || newData.child('status').val() == 'Cancelado' || newData.child('status').val() == 'Novo')"
+            ".validate": "newData.hasChildren(['status', 'dataHora']) && newData.child('status').isString() && newData.child('dataHora').isString() && (newData.child('status').val() == 'Recebido' || newData.child('status').val() == 'Em preparo' || newData.child('status').val() == 'Saiu para entrega' || newData.child('status').val() == 'Entregue' || newData.child('status').val() == 'Pronto para retirada' || newData.child('status').val() == 'Retirado' || newData.child('status').val() == 'Cancelado')",
+            "status": { ".validate": "newData.isString()" },
+            "dataHora": { ".validate": "newData.isString()" },
+            "motivo": { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "$other": { ".validate": false }
           }
         },
-        "estimativa": {
-          ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'",
-          ".validate": "newData.isString() && newData.val().length <= 60"
-        },
-        "motivoCancelamento": {
-          ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'",
-          ".validate": "newData.isString() && newData.val().length <= 500"
-        },
+        "estimativa": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "motivoCancelamento": { ".validate": "newData.isString() && newData.val().length <= 500" },
         "notificacoes": {
           "$notificacaoId": {
-            ".write": "auth != null && auth.token.email == 'casabranca@gmail.com'",
-            ".validate": "newData.hasChildren(['status', 'dataHora', 'enviado']) && newData.child('status').isString() && newData.child('dataHora').isString() && newData.child('enviado').isBoolean()"
+            ".validate": "newData.hasChildren(['status', 'dataHora', 'enviado']) && newData.child('status').isString() && (newData.child('status').val() == 'Recebido' || newData.child('status').val() == 'Em preparo' || newData.child('status').val() == 'Saiu para entrega' || newData.child('status').val() == 'Pronto para retirada' || newData.child('status').val() == 'Entregue' || newData.child('status').val() == 'Retirado' || newData.child('status').val() == 'Cancelado') && newData.child('dataHora').isString() && newData.child('enviado').isBoolean()",
+            "status": { ".validate": "newData.isString()" },
+            "dataHora": { ".validate": "newData.isString()" },
+            "enviado": { ".validate": "newData.isBoolean()" },
+            "$other": { ".validate": false }
           }
-        }
+        },
+        "$other": { ".validate": false }
       }
     },
     "pedidosPrivados": {
-      ".read": "auth != null && auth.token.email == 'casabranca@gmail.com'",
+      ".read": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+      ".indexOn": ["criadoEmTimestamp"],
       "$pedidoId": {
-        ".write": "!data.exists()",
-        ".validate": "newData.hasChildren(['cliente', 'itens', 'subtotal', 'taxa', 'pagamento'])",
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2' || !data.exists()",
+        ".validate": "newData.hasChildren(['cliente', 'itens', 'subtotal', 'taxa', 'pagamento', 'criadoEmTimestamp'])",
         "cliente": {
           ".validate": "newData.hasChildren(['nome', 'telefone'])",
-          "nome": { ".validate": "newData.isString() && newData.val().length <= 120" },
+          "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
           "telefone": { ".validate": "newData.isString() && newData.val().length <= 20" },
           "endereco": { ".validate": "newData.isString() && newData.val().length <= 240" },
-          "referencia": { ".validate": "newData.isString() && newData.val().length <= 240" }
+          "referencia": { ".validate": "newData.isString() && newData.val().length <= 240" },
+          "$other": { ".validate": false }
+        },
+        "itens": {
+          ".validate": "newData.hasChildren(['0'])",
+          "$itemIndex": {
+            ".validate": "newData.hasChildren(['id', 'nome', 'quantidade', 'precoUnit'])",
+            "id": { ".validate": "newData.isString() && newData.val().length <= 100 && root.child('produtos').child(newData.val()).exists()" },
+            "nome": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
+            "quantidade": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100" },
+            "precoUnit": { ".validate": "newData.isNumber() && newData.val() >= 0 && (newData.val() == root.child('produtos').child(newData.parent().child('id').val()).child('preco').val() || (root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').isNumber() && root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').val() > 0 && root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').val() < root.child('produtos').child(newData.parent().child('id').val()).child('preco').val() && newData.val() == root.child('produtos').child(newData.parent().child('id').val()).child('precoPromo').val()))" },
+            "observacao": { ".validate": "newData.isString() && newData.val().length <= 240" },
+            "$other": { ".validate": false }
+          }
         },
         "subtotal": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "taxa": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "itens": {
-          ".validate": "newData.hasChildren(['0'])",
-          "$itemId": {
-            ".validate": "newData.hasChildren(['id', 'nome', 'quantidade', 'precoUnit'])",
-            "id": { ".validate": "newData.isString() && newData.val().length <= 80" },
-            "nome": { ".validate": "newData.isString() && newData.val().length <= 120" },
-            "quantidade": { ".validate": "newData.isNumber() && newData.val() > 0" },
-            "precoUnit": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-            "observacao": { ".validate": "newData.isString() && newData.val().length <= 240" }
-          }
-        },
         "pagamento": {
           ".validate": "newData.hasChildren(['forma'])",
           "forma": { ".validate": "newData.isString() && (newData.val() == 'pix' || newData.val() == 'dinheiro' || newData.val() == 'cartao')" },
-          "trocoPara": { ".validate": "newData.isNumber() || newData.val() == null" }
+          "trocoPara": { ".validate": "newData.isNumber() || newData.val() == null" },
+          "$other": { ".validate": false }
         },
-        "observacaoGeral": { ".validate": "newData.isString() && newData.val().length <= 500" }
+        "observacaoGeral": { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "criadoEmTimestamp": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "$other": { ".validate": false }
+      }
+    },
+    "diagnosticos": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2' && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2' && auth.uid == $uid",
+        "$testeId": {
+          ".validate": "newData.hasChildren(['uid', 'criadoEm']) && newData.child('uid').val() == $uid && newData.child('criadoEm').isString()",
+          "$other": { ".validate": false }
+        }
+      }
+    },
+    "contadores": {
+      "numeroPedido": {
+        ".read": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'",
+        ".write": "auth != null && auth.uid == 'kdPgOUtKk7WUghUIoBacvJEaIPg2'"
       }
     }
   }

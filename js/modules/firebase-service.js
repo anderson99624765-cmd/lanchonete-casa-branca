@@ -1,20 +1,22 @@
 // ==========================================================================
 // Serviço do Firebase - RTDB, Auth e Inicialização (Seed)
-// Utiliza Firebase SDK v10 via ESM CDN e suporte offline/local persistente
+// Firebase SDK modular v13.2.0; falha explicitamente sem config ou conexão ao RTDB.
 // ==========================================================================
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import { 
   getDatabase, 
   ref, 
+  query,
+  orderByChild,
+  limitToLast,
   set, 
   get, 
   push, 
   update, 
   remove, 
-  onValue, 
-  off 
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  onValue
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -23,30 +25,32 @@ import {
   sendPasswordResetEmail,
   updatePassword,
   updateEmail,
+  verifyBeforeUpdateEmail,
   reauthenticateWithCredential,
   EmailAuthProvider,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
 
-import { firebaseConfig, CONFIG_PADRAO } from "./firebase-config.js";
+import { ADMIN_UID, ADMIN_UID_CONFIGURADO, firebaseConfig, firebaseConfigValida, CONFIG_PADRAO } from "../firebase.js";
 
 // Inicialização da aplicação Firebase
 let app = null;
 let db = null;
 let auth = null;
 let conexaoValida = false;
+let firebaseConectado = false;
 
 try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "SUA_API_KEY_AQUI") {
+  if (firebaseConfigValida) {
     app = initializeApp(firebaseConfig);
     db = getDatabase(app);
     auth = getAuth(app);
     conexaoValida = true;
-    console.info("Firebase SDK inicializado com sucesso.");
+    console.info("Firebase SDK inicializado para:", firebaseConfig.projectId, firebaseConfig.databaseURL);
   } else {
-    console.warn("Chaves reais do Firebase não inseridas. Sistema operando com persistência LocalStorage/BroadcastChannel sincronizada em tempo real.");
+    console.error("Firebase não configurado: preencha js/firebase.js. Nenhum dado de negócio será salvo localmente.");
   }
 } catch (e) {
   console.error("Erro ao inicializar Firebase SDK:", e);
@@ -60,6 +64,7 @@ export {
   sendPasswordResetEmail, 
   updatePassword, 
   updateEmail, 
+  verifyBeforeUpdateEmail, 
   reauthenticateWithCredential, 
   EmailAuthProvider,
   setPersistence,
@@ -67,21 +72,79 @@ export {
   browserSessionPersistence
 };
 
-// ==========================================================================
-// CANAL DE SINCRONIZAÇÃO EM TEMPO REAL ENTRE ABAS (BROADCAST CHANNEL)
-// Permite que qualquer alteração no admin reflita no cliente na mesma hora
-// ==========================================================================
-const canalSync = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('casabranca_realtime_sync') : null;
+const STORAGE_KEY_PEDIDOS_RECENTES = 'casabranca_pedidos_recentes';
 
-// Chaves de armazenamento local
-const STORAGE_KEYS = {
-  CONFIG: 'casabranca_db_config',
-  CATEGORIAS: 'casabranca_db_categorias',
-  PRODUTOS: 'casabranca_db_produtos',
-  PEDIDOS: 'casabranca_db_pedidos',
-  PEDIDOS_RECENTES: 'casabranca_pedidos_recentes',
-  CLIENTES: 'casabranca_db_clientes'
-};
+function exigirBanco() {
+  if (!conexaoValida || !db) {
+    const erro = new Error('Firebase não configurado. Preencha js/firebase.js antes de usar o site.');
+    erro.code = 'firebase/not-configured';
+    throw erro;
+  }
+  return db;
+}
+
+function exigirAdmin() {
+  exigirBanco();
+  if (!auth?.currentUser) {
+    const erro = new Error('É necessário autenticar o administrador no Firebase para gravar estes dados.');
+    erro.code = 'auth/not-authenticated';
+    throw erro;
+  }
+  if (!ADMIN_UID_CONFIGURADO || auth.currentUser.uid !== ADMIN_UID) {
+    const erro = new Error('Configure o UID do administrador em js/firebase.js e autentique essa conta para gravar dados.');
+    erro.code = 'auth/admin-only';
+    throw erro;
+  }
+  return auth.currentUser;
+}
+
+function exigirConexaoAtiva() {
+  if (!firebaseConectado) {
+    const erro = new Error('Sem conexão com o Firebase. Nenhuma alteração foi salva; reconecte e tente novamente.');
+    erro.code = 'firebase/disconnected';
+    throw erro;
+  }
+}
+
+function reportarErroFirebase(operacao, caminho, erro, onError) {
+  console.error(`Falha Firebase em ${operacao} (${caminho}):`, erro);
+  if (typeof onError === 'function') onError(erro);
+}
+
+export function assinarConexaoFirebase(callback) {
+  if (!conexaoValida || !db) {
+    callback(false);
+    return () => {};
+  }
+  return onValue(ref(db, '.info/connected'), (snapshot) => {
+    firebaseConectado = snapshot.val() === true;
+    callback(firebaseConectado);
+  }, (erro) => {
+    firebaseConectado = false;
+    reportarErroFirebase('observar conexão', '.info/connected', erro);
+    callback(false);
+  });
+}
+
+export function aguardarConexaoFirebase(limiteMs = 12000) {
+  if (!conexaoValida || !db) return Promise.reject(new Error('Firebase não configurado.'));
+  if (firebaseConectado) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    let unsubscribe = () => {};
+    const tempoLimite = setTimeout(() => {
+      unsubscribe();
+      const erro = new Error('O Firebase não confirmou conexão dentro do tempo limite. Verifique a internet e a URL do Realtime Database.');
+      erro.code = 'firebase/connection-timeout';
+      reject(erro);
+    }, limiteMs);
+    unsubscribe = assinarConexaoFirebase((conectado) => {
+      if (!conectado) return;
+      clearTimeout(tempoLimite);
+      unsubscribe();
+      resolve();
+    });
+  });
+}
 
 // ==========================================================================
 // SEED INICIAL (CATEGORIAS E PRODUTOS PADRÃO)
@@ -159,11 +222,12 @@ const SEED_PRODUTOS_INICIAIS = [
  * Garante o seed inicial caso não haja dados
  */
 export async function verificarEExecutarSeed() {
-  if (conexaoValida && db) {
-    try {
+  exigirAdmin();
+  try {
+  await aguardarConexaoFirebase();
       const configSnapshot = await get(ref(db, "config"));
       if (!configSnapshot.exists()) {
-        await set(ref(db, "config"), CONFIG_PADRAO);
+        await set(ref(db, "config"), { ...CONFIG_PADRAO, __seedDefault: true });
         console.log("Configurações iniciais gravadas no Firebase.");
       }
 
@@ -195,305 +259,136 @@ export async function verificarEExecutarSeed() {
       if (!prodSnapshot.exists() && salgadosId) {
         const produtosRef = ref(db, "produtos");
         for (const prod of SEED_PRODUTOS_INICIAIS) {
-          await push(produtosRef, { ...prod, categoriaId: salgadosId });
+          const dadosProduto = { ...prod };
+          delete dadosProduto.id;
+          await push(produtosRef, { ...dadosProduto, categoriaId: salgadosId });
         }
       }
-    } catch (err) {
-      console.error("Erro no seed do Firebase:", err);
-    }
-  } else {
-    // Seed local garantido
-    if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) {
-      localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(CONFIG_PADRAO));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.CATEGORIAS)) {
-      localStorage.setItem(STORAGE_KEYS.CATEGORIAS, JSON.stringify(SEED_CATEGORIAS_INICIAIS));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.PRODUTOS)) {
-      localStorage.setItem(STORAGE_KEYS.PRODUTOS, JSON.stringify(SEED_PRODUTOS_INICIAIS));
-    }
+  } catch (err) {
+    reportarErroFirebase('seed inicial', '/config, /categorias, /produtos', err);
+    throw err;
   }
 }
 
 // --------------------------------------------------------------------------
 // MÉTODOS DE CONFIGURAÇÃO DO SITE (/config)
 // --------------------------------------------------------------------------
-export function assinarConfiguracoes(callback) {
-  if (conexaoValida && db) {
-    const configRef = ref(db, "config");
-    return onValue(configRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val();
-        localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(val));
-        callback(val);
-      } else {
-        callback(CONFIG_PADRAO);
-      }
-    }, (err) => {
-      console.warn("RTDB config listener falhou, usando local:", err);
-      carregarConfigLocal(callback);
-    });
-  } else {
-    carregarConfigLocal(callback);
-
-    const onStorage = (e) => {
-      if (e.key === STORAGE_KEYS.CONFIG) {
-        carregarConfigLocal(callback);
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
-    const onBroadcast = (e) => {
-      if (e.data?.tipo === 'config_alterada') {
-        carregarConfigLocal(callback);
-      }
-    };
-    if (canalSync) canalSync.addEventListener('message', onBroadcast);
-
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      if (canalSync) canalSync.removeEventListener('message', onBroadcast);
-    };
+export function assinarConfiguracoes(callback, onError) {
+  if (!conexaoValida || !db) {
+    const erro = new Error('Firebase não configurado. Não foi possível ler /config.');
+    reportarErroFirebase('leitura em tempo real', '/config', erro, onError);
+    return () => {};
   }
-}
-
-function carregarConfigLocal(callback) {
-  try {
-    const salvo = localStorage.getItem(STORAGE_KEYS.CONFIG);
-    if (salvo) {
-      callback({ ...CONFIG_PADRAO, ...JSON.parse(salvo) });
+  return onValue(ref(db, 'config'), (snapshot) => {
+    if (!snapshot.exists()) {
+      const erro = new Error('O nó /config não existe. Entre no admin para executar o seed inicial.');
+      reportarErroFirebase('leitura', '/config', erro, onError);
       return;
     }
-  } catch (e) {
-    console.warn("Erro ao ler config local:", e);
-  }
-  callback(CONFIG_PADRAO);
+    callback(snapshot.val());
+  }, (erro) => reportarErroFirebase('listener em tempo real', '/config', erro, onError));
 }
 
 export async function salvarConfiguracoes(novasConfigs) {
-  // Salva imediatamente no localStorage para garantir persistência instantânea
+  exigirAdmin();
+  exigirConexaoAtiva();
   try {
-    const atual = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || "{}");
-    const merged = { ...CONFIG_PADRAO, ...atual, ...novasConfigs };
-    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(merged));
-    if (canalSync) canalSync.postMessage({ tipo: 'config_alterada', dados: merged });
+    await update(ref(db, 'config'), { ...novasConfigs, __seedDefault: false });
+    return true;
   } catch (e) {
-    console.warn("Erro ao gravar config no cache local:", e);
+    reportarErroFirebase('gravação', '/config', e);
+    throw e;
   }
-
-  if (conexaoValida && db) {
-    return update(ref(db, "config"), novasConfigs);
-  }
-  return true;
 }
 
 // --------------------------------------------------------------------------
 // MÉTODOS DE CATEGORIAS (/categorias)
 // --------------------------------------------------------------------------
-export function assinarCategorias(callback) {
-  if (conexaoValida && db) {
-    const catRef = ref(db, "categorias");
-    return onValue(catRef, (snapshot) => {
-      const dados = [];
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          dados.push({ id: child.key, ...child.val() });
-        });
-        dados.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-        localStorage.setItem(STORAGE_KEYS.CATEGORIAS, JSON.stringify(dados));
-      }
-      callback(dados);
-    }, (err) => {
-      console.warn("RTDB categorias listener falhou, usando local:", err);
-      carregarCategoriasLocal(callback);
-    });
-  } else {
-    carregarCategoriasLocal(callback);
-
-    const onStorage = (e) => {
-      if (e.key === STORAGE_KEYS.CATEGORIAS) {
-        carregarCategoriasLocal(callback);
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
-    const onBroadcast = (e) => {
-      if (e.data?.tipo === 'categorias_alteradas') {
-        carregarCategoriasLocal(callback);
-      }
-    };
-    if (canalSync) canalSync.addEventListener('message', onBroadcast);
-
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      if (canalSync) canalSync.removeEventListener('message', onBroadcast);
-    };
+export function assinarCategorias(callback, onError) {
+  if (!conexaoValida || !db) {
+    reportarErroFirebase('leitura em tempo real', '/categorias', new Error('Firebase não configurado.'), onError);
+    return () => {};
   }
-}
-
-function carregarCategoriasLocal(callback) {
-  try {
-    const salvo = localStorage.getItem(STORAGE_KEYS.CATEGORIAS);
-    if (salvo) {
-      const parsed = JSON.parse(salvo);
-      parsed.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-      callback(parsed);
-      return;
-    }
-  } catch (e) {
-    console.warn("Erro ao ler categorias locais:", e);
-  }
-  callback(SEED_CATEGORIAS_INICIAIS);
+  return onValue(ref(db, 'categorias'), (snapshot) => {
+    const dados = [];
+    snapshot.forEach((child) => dados.push({ ...child.val(), id: child.key }));
+    dados.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+    callback(dados);
+  }, (erro) => reportarErroFirebase('listener em tempo real', '/categorias', erro, onError));
 }
 
 export async function salvarCategoria(categoria, id = null) {
-  // Atualiza cache local imediatamente
+  exigirAdmin();
+  exigirConexaoAtiva();
   try {
-    let cats = JSON.parse(localStorage.getItem(STORAGE_KEYS.CATEGORIAS) || "[]");
-    if (!cats || cats.length === 0) cats = [...SEED_CATEGORIAS_INICIAIS];
-
     if (id) {
-      const idx = cats.findIndex(c => c.id === id);
-      if (idx > -1) {
-        cats[idx] = { ...cats[idx], ...categoria, id };
-      }
-    } else {
-      const novoId = "cat-" + Date.now();
-      cats.push({ ...categoria, id: novoId });
+      await update(ref(db, `categorias/${id}`), categoria);
+      return id;
     }
-    cats.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-    localStorage.setItem(STORAGE_KEYS.CATEGORIAS, JSON.stringify(cats));
-    if (canalSync) canalSync.postMessage({ tipo: 'categorias_alteradas' });
+    const novo = push(ref(db, 'categorias'));
+    await set(novo, categoria);
+    return novo.key;
   } catch (e) {
-    console.warn("Erro ao atualizar categoria localmente:", e);
+    reportarErroFirebase('gravação', id ? `/categorias/${id}` : '/categorias', e);
+    throw e;
   }
-
-  if (conexaoValida && db) {
-    if (id) {
-      return update(ref(db, `categorias/${id}`), categoria);
-    } else {
-      return push(ref(db, "categorias"), categoria);
-    }
-  }
-  return true;
 }
 
 export async function excluirCategoria(id) {
+  exigirAdmin();
+  exigirConexaoAtiva();
   try {
-    let cats = JSON.parse(localStorage.getItem(STORAGE_KEYS.CATEGORIAS) || "[]");
-    cats = cats.filter(c => c.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CATEGORIAS, JSON.stringify(cats));
-    if (canalSync) canalSync.postMessage({ tipo: 'categorias_alteradas' });
+    await remove(ref(db, `categorias/${id}`));
   } catch (e) {
-    console.warn("Erro ao excluir categoria localmente:", e);
+    reportarErroFirebase('remoção', `/categorias/${id}`, e);
+    throw e;
   }
-
-  if (conexaoValida && db) {
-    return remove(ref(db, `categorias/${id}`));
-  }
-  return true;
 }
 
 // --------------------------------------------------------------------------
 // MÉTODOS DE PRODUTOS (/produtos)
 // --------------------------------------------------------------------------
-export function assinarProdutos(callback) {
-  if (conexaoValida && db) {
-    const prodRef = ref(db, "produtos");
-    return onValue(prodRef, (snapshot) => {
-      const dados = [];
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          dados.push({ id: child.key, ...child.val() });
-        });
-        localStorage.setItem(STORAGE_KEYS.PRODUTOS, JSON.stringify(dados));
-      }
-      callback(dados);
-    }, (err) => {
-      console.warn("RTDB produtos listener falhou, usando local:", err);
-      carregarProdutosLocal(callback);
+export function assinarProdutos(callback, onError) {
+  if (!conexaoValida || !db) {
+    reportarErroFirebase('leitura em tempo real', '/produtos', new Error('Firebase não configurado.'), onError);
+    return () => {};
+  }
+  return onValue(ref(db, 'produtos'), (snapshot) => {
+    const dados = [];
+    snapshot.forEach((child) => {
+      const produto = child.val();
+      dados.push({ ...produto, id: child.key, ...(produto.id && produto.id !== child.key ? { idLegado: produto.id } : {}) });
     });
-  } else {
-    carregarProdutosLocal(callback);
-
-    const onStorage = (e) => {
-      if (e.key === STORAGE_KEYS.PRODUTOS) {
-        carregarProdutosLocal(callback);
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
-    const onBroadcast = (e) => {
-      if (e.data?.tipo === 'produtos_alterados') {
-        carregarProdutosLocal(callback);
-      }
-    };
-    if (canalSync) canalSync.addEventListener('message', onBroadcast);
-
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      if (canalSync) canalSync.removeEventListener('message', onBroadcast);
-    };
-  }
-}
-
-function carregarProdutosLocal(callback) {
-  try {
-    const salvo = localStorage.getItem(STORAGE_KEYS.PRODUTOS);
-    if (salvo) {
-      callback(JSON.parse(salvo));
-      return;
-    }
-  } catch (e) {
-    console.warn("Erro ao ler produtos locais:", e);
-  }
-  callback(SEED_PRODUTOS_INICIAIS);
+    callback(dados);
+  }, (erro) => reportarErroFirebase('listener em tempo real', '/produtos', erro, onError));
 }
 
 export async function salvarProduto(produto, id = null) {
+  exigirAdmin();
+  exigirConexaoAtiva();
   try {
-    let prods = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUTOS) || "[]");
-    if (!prods || prods.length === 0) prods = [...SEED_PRODUTOS_INICIAIS];
-
     if (id) {
-      const idx = prods.findIndex(p => p.id === id);
-      if (idx > -1) {
-        prods[idx] = { ...prods[idx], ...produto, id };
-      }
-    } else {
-      const novoId = "prod-" + Date.now();
-      prods.push({ ...produto, id: novoId });
+      await update(ref(db, `produtos/${id}`), produto);
+      return id;
     }
-    localStorage.setItem(STORAGE_KEYS.PRODUTOS, JSON.stringify(prods));
-    if (canalSync) canalSync.postMessage({ tipo: 'produtos_alterados' });
+    const novo = push(ref(db, 'produtos'));
+    await set(novo, produto);
+    return novo.key;
   } catch (e) {
-    console.warn("Erro ao salvar produto localmente:", e);
+    reportarErroFirebase('gravação', id ? `/produtos/${id}` : '/produtos', e);
+    throw e;
   }
-
-  if (conexaoValida && db) {
-    if (id) {
-      return update(ref(db, `produtos/${id}`), produto);
-    } else {
-      return push(ref(db, "produtos"), produto);
-    }
-  }
-  return true;
 }
 
 export async function excluirProduto(id) {
+  exigirAdmin();
+  exigirConexaoAtiva();
   try {
-    let prods = JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUTOS) || "[]");
-    prods = prods.filter(p => p.id !== id);
-    localStorage.setItem(STORAGE_KEYS.PRODUTOS, JSON.stringify(prods));
-    if (canalSync) canalSync.postMessage({ tipo: 'produtos_alterados' });
+    await remove(ref(db, `produtos/${id}`));
   } catch (e) {
-    console.warn("Erro ao excluir produto localmente:", e);
+    reportarErroFirebase('remoção', `/produtos/${id}`, e);
+    throw e;
   }
-
-  if (conexaoValida && db) {
-    return remove(ref(db, `produtos/${id}`));
-  }
-  return true;
 }
 
 // --------------------------------------------------------------------------
@@ -501,99 +396,66 @@ export async function excluirProduto(id) {
 // --------------------------------------------------------------------------
 export async function buscarClientePorTelefone(telefoneLimpo) {
   if (!telefoneLimpo) return null;
-  if (conexaoValida && db) {
-    try {
-      const snap = await get(ref(db, `clientes/${telefoneLimpo}`));
-      if (snap.exists()) return snap.val();
-    } catch (e) {
-      console.warn("Busca de cliente no RTDB falhou, buscando local:", e);
-    }
-  }
-
+  if (!auth?.currentUser || !ADMIN_UID_CONFIGURADO || auth.currentUser.uid !== ADMIN_UID) return null;
+  exigirBanco();
   try {
-    const clientes = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLIENTES) || "{}");
-    return clientes[telefoneLimpo] || null;
-  } catch (e) {
-    return null;
+    const snap = await get(ref(db, `clientes/${telefoneLimpo}`));
+    return snap.exists() ? snap.val() : null;
+  } catch (erro) {
+    reportarErroFirebase('consulta', `/clientes/${telefoneLimpo}`, erro);
+    throw erro;
   }
 }
 
 export async function salvarCliente(cliente) {
   const telLimpo = (cliente.telefone || "").replace(/\D/g, "");
-  if (!telLimpo) return;
+  if (!telLimpo) throw new Error('Telefone inválido: o cliente não foi salvo.');
+  exigirBanco();
+  exigirConexaoAtiva();
 
   const clienteData = {
     ...cliente,
     telefoneLimpo: telLimpo,
-    atualizadoEm: new Date().toISOString()
+    atualizadoEm: new Date().toISOString(),
+    atualizadoEmTimestamp: Date.now()
   };
 
   try {
-    const clientes = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLIENTES) || "{}");
-    clientes[telLimpo] = clienteData;
-    localStorage.setItem(STORAGE_KEYS.CLIENTES, JSON.stringify(clientes));
-    if (canalSync) canalSync.postMessage({ tipo: 'clientes_alterados' });
-  } catch (e) {
-    console.warn("Erro ao salvar cliente localmente:", e);
-  }
-
-  if (conexaoValida && db) {
-    return set(ref(db, `clientes/${telLimpo}`), clienteData);
-  }
-  return true;
-}
-
-export function assinarClientes(callback) {
-  if (conexaoValida && db) {
-    const clientRef = ref(db, "clientes");
-    return onValue(clientRef, (snapshot) => {
-      const dados = [];
-      if (snapshot.exists()) {
-        snapshot.forEach((child) => {
-          dados.push({ id: child.key, ...child.val() });
-        });
-      }
-      callback(dados);
-    }, (err) => {
-      console.warn("RTDB clientes listener falhou:", err);
-      carregarClientesLocal(callback);
-    });
-  } else {
-    carregarClientesLocal(callback);
-
-    const onBroadcast = (e) => {
-      if (e.data?.tipo === 'clientes_alterados') {
-        carregarClientesLocal(callback);
-      }
-    };
-    if (canalSync) canalSync.addEventListener('message', onBroadcast);
-
-    return () => {
-      if (canalSync) canalSync.removeEventListener('message', onBroadcast);
-    };
+    await set(ref(db, `clientes/${telLimpo}`), clienteData);
+    return true;
+  } catch (erro) {
+    reportarErroFirebase('gravação', `/clientes/${telLimpo}`, erro);
+    throw erro;
   }
 }
 
-function carregarClientesLocal(callback) {
-  try {
-    const clientesMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.CLIENTES) || "{}");
-    const arr = Object.keys(clientesMap).map(k => ({ id: k, ...clientesMap[k] }));
-    callback(arr);
-  } catch (e) {
-    callback([]);
+export function assinarClientes(callback, onError) {
+  exigirAdmin();
+  if (!conexaoValida || !db) {
+    reportarErroFirebase('leitura em tempo real', '/clientes', new Error('Firebase não configurado.'), onError);
+    return () => {};
   }
+  const consulta = query(ref(db, 'clientes'), orderByChild('atualizadoEmTimestamp'), limitToLast(200));
+  return onValue(consulta, (snapshot) => {
+    const dados = [];
+    snapshot.forEach((child) => dados.push({ id: child.key, ...child.val() }));
+    dados.sort((a, b) => (b.atualizadoEmTimestamp || 0) - (a.atualizadoEmTimestamp || 0));
+    callback(dados);
+  }, (erro) => reportarErroFirebase('listener em tempo real', '/clientes', erro, onError));
 }
 
 // --------------------------------------------------------------------------
 // MÉTODOS DE PEDIDOS (/pedidos)
 // --------------------------------------------------------------------------
 export async function criarPedido(pedido) {
+  exigirBanco();
+  exigirConexaoAtiva();
   const numeroPedido = Math.floor(1000 + Math.random() * 9000);
   const criadoEm = new Date().toISOString();
   const criadoEmTimestamp = Date.now();
   const status = "Recebido";
 
-  if (conexaoValida && db) {
+  try {
     const novoPedidoRef = push(ref(db, "pedidos"));
     const id = novoPedidoRef.key;
     const eventoInicialRef = push(ref(db, `pedidos/${id}/historico`));
@@ -604,7 +466,9 @@ export async function criarPedido(pedido) {
       criadoEm,
       criadoEmTimestamp,
       tipo: pedido.tipo,
-      itens: (pedido.itens || []).map(({ nome, quantidade, precoUnit }) => ({ nome, quantidade, precoUnit })),
+      itens: (pedido.itens || []).map(({ id, nome, quantidade, precoUnit }) => ({ id, nome, quantidade, precoUnit })),
+      subtotal: pedido.subtotal,
+      taxa: pedido.taxa,
       total: pedido.total,
       pagamento: pedido.pagamento?.forma || "não informado",
       historico: {
@@ -618,7 +482,8 @@ export async function criarPedido(pedido) {
       subtotal: pedido.subtotal,
       taxa: pedido.taxa,
       pagamento: pedido.pagamento,
-      observacaoGeral: pedido.observacaoGeral || ""
+      observacaoGeral: pedido.observacaoGeral || "",
+      criadoEmTimestamp
     };
 
     await update(ref(db), {
@@ -627,112 +492,43 @@ export async function criarPedido(pedido) {
     });
 
     const pedidoCompleto = { id, ...pedidoPublico, ...pedidoPrivado };
-    armazenarPedidoLocal(pedidoCompleto);
     registrarPedidoRecente(pedidoCompleto);
     return pedidoCompleto;
+  } catch (erro) {
+    reportarErroFirebase('criação do pedido', '/pedidos e /pedidosPrivados', erro);
+    throw erro;
   }
-
-  const id = `ped-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  const pedidoCompleto = {
-    id,
-    ...pedido,
-    numero: numeroPedido,
-    status,
-    criadoEm,
-    criadoEmTimestamp,
-    historico: { [`evt-${criadoEmTimestamp}`]: { status, dataHora: criadoEm } }
-  };
-  armazenarPedidoLocal(pedidoCompleto);
-  registrarPedidoRecente(pedidoCompleto);
-  return pedidoCompleto;
 }
 
-export function assinarPedidos(callback) {
+export function assinarPedidos(callback, onError) {
+  exigirAdmin();
   const caminhoPedidos = "/pedidos";
-  console.log("[Pedidos] Caminho lido:", caminhoPedidos, conexaoValida ? "(Firebase RTDB)" : "(LocalStorage)");
-
-  if (conexaoValida && db) {
-    let unsubscribeLocal = null;
-    let dadosPublicos = {};
-    let dadosPrivados = {};
-    const emitirPedidos = () => {
-      const dados = Object.keys(dadosPublicos).map((id) => ({
-        id,
-        ...dadosPublicos[id],
-        ...(dadosPrivados[id] || {})
-      }));
-      dados.sort((a, b) => (b.criadoEmTimestamp || 0) - (a.criadoEmTimestamp || 0));
-      console.log("[Pedidos] Snapshot bruto (Firebase):", dadosPublicos);
-      console.log("[Pedidos] Lista filtrada (status Recebido):", dados.filter((pedido) => pedido.status === "Recebido" || pedido.status === "Novo"));
-      callback(dados);
-    };
-    const iniciarFallbackLocal = (err) => {
-      console.warn("RTDB pedidos listener falhou:", err);
-      if (!unsubscribeLocal) unsubscribeLocal = assinarPedidosLocal(callback);
-    };
-    const unsubscribePublicos = onValue(ref(db, caminhoPedidos), (snapshot) => {
-      dadosPublicos = snapshot.val() || {};
-      emitirPedidos();
-    }, iniciarFallbackLocal);
-    const unsubscribePrivados = onValue(ref(db, "pedidosPrivados"), (snapshot) => {
-      dadosPrivados = snapshot.val() || {};
-      emitirPedidos();
-    }, iniciarFallbackLocal);
-
-    return () => {
-      unsubscribePublicos();
-      unsubscribePrivados();
-      if (unsubscribeLocal) unsubscribeLocal();
-    };
-  }
-
-  return assinarPedidosLocal(callback);
-}
-
-function assinarPedidosLocal(callback) {
-  const notificar = () => carregarPedidosLocal((pedidos) => {
-    console.log("[Pedidos] Snapshot bruto (LocalStorage):", pedidos);
-    console.log("[Pedidos] Lista filtrada (status Recebido):", pedidos.filter((pedido) => pedido.status === "Recebido" || pedido.status === "Novo"));
-    callback(pedidos);
-  });
-  notificar();
-
-  const onStorage = (event) => {
-    if (event.key === STORAGE_KEYS.PEDIDOS) notificar();
+  let dadosPublicos = {};
+  let dadosPrivados = {};
+  const emitirPedidos = () => {
+    const dados = Object.keys(dadosPublicos).map((id) => ({
+      id,
+      ...dadosPublicos[id],
+      ...(dadosPrivados[id] || {})
+    }));
+    dados.sort((a, b) => (b.criadoEmTimestamp || 0) - (a.criadoEmTimestamp || 0));
+    callback(dados);
   };
-  const onBroadcast = (event) => {
-    if (event.data?.tipo === 'pedidos_alterados') notificar();
-  };
-
-  window.addEventListener('storage', onStorage);
-  if (canalSync) canalSync.addEventListener('message', onBroadcast);
+  const consultaPublicos = query(ref(db, caminhoPedidos), orderByChild('criadoEmTimestamp'), limitToLast(500));
+  const consultaPrivados = query(ref(db, 'pedidosPrivados'), orderByChild('criadoEmTimestamp'), limitToLast(500));
+  const unsubscribePublicos = onValue(consultaPublicos, (snapshot) => {
+    dadosPublicos = snapshot.val() || {};
+    emitirPedidos();
+  }, (erro) => reportarErroFirebase('listener de pedidos', caminhoPedidos, erro, onError));
+  const unsubscribePrivados = onValue(consultaPrivados, (snapshot) => {
+    dadosPrivados = snapshot.val() || {};
+    emitirPedidos();
+  }, (erro) => reportarErroFirebase('listener de dados privados dos pedidos', '/pedidosPrivados', erro, onError));
 
   return () => {
-    window.removeEventListener('storage', onStorage);
-    if (canalSync) canalSync.removeEventListener('message', onBroadcast);
+    unsubscribePublicos();
+    unsubscribePrivados();
   };
-}
-
-function carregarPedidosLocal(callback) {
-  try {
-    const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
-    pedidos.sort((a, b) => (b.criadoEmTimestamp || 0) - (a.criadoEmTimestamp || 0));
-    callback(pedidos);
-  } catch (e) {
-    callback([]);
-  }
-}
-
-function armazenarPedidoLocal(pedido) {
-  try {
-    let pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
-    pedidos = pedidos.filter((item) => item.id !== pedido.id);
-    pedidos.unshift(pedido);
-    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
-    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
-  } catch (e) {
-    console.warn("Erro ao guardar pedido localmente:", e);
-  }
 }
 
 function registrarPedidoRecente(pedido) {
@@ -748,7 +544,7 @@ function registrarPedidoRecente(pedido) {
       status: pedido.status,
       criadoEm: pedido.criadoEm
     });
-    localStorage.setItem(STORAGE_KEYS.PEDIDOS_RECENTES, JSON.stringify(recentes.slice(0, 10)));
+    localStorage.setItem(STORAGE_KEY_PEDIDOS_RECENTES, JSON.stringify(recentes.slice(0, 10)));
     localStorage.setItem("casabranca_ultimo_pedido_id", pedido.id);
   } catch (e) {
     console.warn("Não foi possível guardar a lista local de pedidos:", e);
@@ -761,29 +557,10 @@ export function atualizarPedidoRecente(pedido) {
 
 export function obterPedidosRecentes() {
   try {
-    const recentes = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS_RECENTES) || "[]");
+    const recentes = JSON.parse(localStorage.getItem(STORAGE_KEY_PEDIDOS_RECENTES) || "[]");
     return Array.isArray(recentes) ? recentes : [];
   } catch (e) {
     return [];
-  }
-}
-
-function atualizarPedidoLocal(pedidoId, alteracoes, eventoHistorico = null) {
-  try {
-    const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
-    const pedido = pedidos.find((item) => item.id === pedidoId);
-    if (!pedido) return;
-    Object.assign(pedido, alteracoes);
-    if (eventoHistorico) {
-      pedido.historico = pedido.historico || {};
-      pedido.historico[`evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`] = eventoHistorico;
-    }
-    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
-    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
-    const recentes = obterPedidosRecentes().map((item) => item.id === pedidoId ? { ...item, status: pedido.status } : item);
-    localStorage.setItem(STORAGE_KEYS.PEDIDOS_RECENTES, JSON.stringify(recentes));
-  } catch (e) {
-    console.warn("Erro ao atualizar pedido local:", e);
   }
 }
 
@@ -793,36 +570,19 @@ export function assinarPedidoPublico(pedidoId, callback, aoFalhar = () => {}) {
     return () => {};
   }
 
-  if (conexaoValida && db) {
-    return onValue(ref(db, `pedidos/${pedidoId}`), (snapshot) => {
-      callback(snapshot.exists() ? { id: pedidoId, ...snapshot.val() } : null);
-    }, aoFalhar);
+  if (!conexaoValida || !db) {
+    const erro = new Error('Firebase não configurado. O acompanhamento online está indisponível.');
+    reportarErroFirebase('leitura do pedido', `/pedidos/${pedidoId}`, erro, aoFalhar);
+    return () => {};
   }
-
-  const notificar = () => {
-    try {
-      const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || "[]");
-      callback(pedidos.find((pedido) => pedido.id === pedidoId) || null);
-    } catch (e) {
-      aoFalhar(e);
-    }
-  };
-  notificar();
-  const onStorage = (event) => {
-    if (event.key === STORAGE_KEYS.PEDIDOS) notificar();
-  };
-  const onBroadcast = (event) => {
-    if (event.data?.tipo === 'pedidos_alterados') notificar();
-  };
-  window.addEventListener('storage', onStorage);
-  if (canalSync) canalSync.addEventListener('message', onBroadcast);
-  return () => {
-    window.removeEventListener('storage', onStorage);
-    if (canalSync) canalSync.removeEventListener('message', onBroadcast);
-  };
+  return onValue(ref(db, `pedidos/${pedidoId}`), (snapshot) => {
+    callback(snapshot.exists() ? { id: pedidoId, ...snapshot.val() } : null);
+  }, (erro) => reportarErroFirebase('listener do pedido', `/pedidos/${pedidoId}`, erro, aoFalhar));
 }
 
 export async function atualizarStatusPedido(pedidoId, novoStatus, opcoes = {}) {
+  exigirAdmin();
+  exigirConexaoAtiva();
   const dataHora = new Date().toISOString();
   const evento = { status: novoStatus, dataHora };
   const alteracoes = {
@@ -835,55 +595,266 @@ export async function atualizarStatusPedido(pedidoId, novoStatus, opcoes = {}) {
   }
   if (opcoes.estimativa) alteracoes[`pedidos/${pedidoId}/estimativa`] = opcoes.estimativa;
 
-  if (conexaoValida && db) {
+  try {
     const eventoRef = push(ref(db, `pedidos/${pedidoId}/historico`));
     alteracoes[`pedidos/${pedidoId}/historico/${eventoRef.key}`] = evento;
-    return update(ref(db), alteracoes);
+    await update(ref(db), alteracoes);
+    return true;
+  } catch (erro) {
+    reportarErroFirebase('atualização de status', `/pedidos/${pedidoId}`, erro);
+    throw erro;
   }
-
-  atualizarPedidoLocal(pedidoId, {
-    status: novoStatus,
-    atualizadoEm: dataHora,
-    ...(opcoes.motivoCancelamento ? { motivoCancelamento: opcoes.motivoCancelamento } : {}),
-    ...(opcoes.estimativa ? { estimativa: opcoes.estimativa } : {})
-  }, evento);
-  return true;
 }
 
 export async function salvarEstimativaPedido(pedidoId, estimativa) {
-  if (conexaoValida && db) {
-    return update(ref(db), { [`pedidos/${pedidoId}/estimativa`]: estimativa });
+  exigirAdmin();
+  exigirConexaoAtiva();
+  try {
+    await update(ref(db), { [`pedidos/${pedidoId}/estimativa`]: estimativa });
+    return true;
+  } catch (erro) {
+    reportarErroFirebase('gravação de previsão', `/pedidos/${pedidoId}/estimativa`, erro);
+    throw erro;
   }
-  atualizarPedidoLocal(pedidoId, { estimativa });
-  return true;
 }
 
 export async function registrarNotificacaoPedido(pedidoId, status, enviado) {
+  exigirAdmin();
+  exigirConexaoAtiva();
   const notificacao = {
     status: String(status || ''),
     dataHora: new Date().toISOString(),
     enviado: Boolean(enviado)
   };
 
-  if (conexaoValida && db) {
+  try {
     const notificacaoRef = push(ref(db, `pedidos/${pedidoId}/notificacoes`));
     await set(notificacaoRef, notificacao);
     return { id: notificacaoRef.key, ...notificacao };
+  } catch (erro) {
+    reportarErroFirebase('registro de notificação', `/pedidos/${pedidoId}/notificacoes`, erro);
+    throw erro;
+  }
+}
+
+function lerDadosLegados(chave, valorPadrao) {
+  try {
+    const bruto = localStorage.getItem(chave);
+    return bruto ? JSON.parse(bruto) : valorPadrao;
+  } catch (erro) {
+    throw new Error(`O dado local "${chave}" não pôde ser lido: ${erro.message}`);
+  }
+}
+
+function registrosLegados(valor) {
+  if (Array.isArray(valor)) return valor.filter((item) => item && typeof item === 'object');
+  if (!valor || typeof valor !== 'object') return [];
+  return Object.entries(valor).map(([id, registro]) => ({ id, ...registro }));
+}
+
+function assinaturaColecao(tipo, registro, mapaCategorias = new Map()) {
+  const normalizar = (valor) => String(valor ?? '').trim().toLocaleLowerCase('pt-BR');
+  if (tipo === 'categorias') return normalizar(registro.nome);
+  if (tipo === 'produtos') {
+    const categoria = mapaCategorias.get(registro.categoriaId) || registro.categoriaId;
+    return `${normalizar(registro.nome)}|${normalizar(categoria)}`;
+  }
+  return normalizar(registro.telefoneLimpo || registro.id);
+}
+
+function assinaturaPedido(pedidoPublico, pedidoPrivado) {
+  const telefone = String(pedidoPrivado?.cliente?.telefone || '').replace(/\D/g, '');
+  return `${pedidoPublico?.numero || ''}|${pedidoPublico?.criadoEmTimestamp || ''}|${telefone}`;
+}
+
+export async function migrarDadosLocaisParaFirebase() {
+  exigirAdmin();
+  await aguardarConexaoFirebase();
+  const chaveMigracao = 'casabranca_migracao_firebase_v1';
+  if (localStorage.getItem(chaveMigracao)) {
+    const erro = new Error('A migração deste aparelho já foi concluída.');
+    erro.code = 'migration/already-completed';
+    throw erro;
   }
 
   try {
-    const pedidos = JSON.parse(localStorage.getItem(STORAGE_KEYS.PEDIDOS) || '[]');
-    const pedido = pedidos.find((item) => item.id === pedidoId);
-    if (!pedido) throw new Error('Pedido não encontrado no armazenamento local.');
-    pedido.notificacoes = pedido.notificacoes || {};
-    const id = `aviso-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    pedido.notificacoes[id] = notificacao;
-    localStorage.setItem(STORAGE_KEYS.PEDIDOS, JSON.stringify(pedidos));
-    if (canalSync) canalSync.postMessage({ tipo: 'pedidos_alterados' });
-    return { id, ...notificacao };
-  } catch (error) {
-    console.error('Erro ao registrar aviso do pedido:', error);
-    throw error;
+    const localConfig = lerDadosLegados('casabranca_db_config', {});
+    const localCategorias = registrosLegados(lerDadosLegados('casabranca_db_categorias', []));
+    const localProdutos = registrosLegados(lerDadosLegados('casabranca_db_produtos', []));
+    const localClientes = registrosLegados(lerDadosLegados('casabranca_db_clientes', {}));
+    const localPedidos = registrosLegados(lerDadosLegados('casabranca_db_pedidos', []));
+    const contagem = { configuracoes: 0, categorias: 0, produtos: 0, clientes: 0, pedidos: 0, ignorados: 0 };
+
+    const configSnapshot = await get(ref(db, 'config'));
+    const configAtual = configSnapshot.val() || {};
+    const configFaltante = {};
+    const configSemeadaSemEdicoes = configAtual.__seedDefault === true;
+    Object.entries(localConfig).forEach(([chave, valor]) => {
+      if (chave === '__seedDefault') return;
+      if (configSemeadaSemEdicoes) {
+        configFaltante[chave] = valor;
+        return;
+      }
+      if (chave === 'cores' && valor && typeof valor === 'object') {
+        const coresFaltantes = Object.fromEntries(Object.entries(valor).filter(([nome]) => configAtual.cores?.[nome] === undefined));
+        if (Object.keys(coresFaltantes).length) configFaltante.cores = { ...configFaltante.cores, ...coresFaltantes };
+      } else if (configAtual[chave] === undefined) {
+        configFaltante[chave] = valor;
+      } else {
+        contagem.ignorados++;
+      }
+    });
+    if (configSemeadaSemEdicoes && Object.keys(localConfig).length) configFaltante.__seedDefault = false;
+    if (Object.keys(configFaltante).length) {
+      await update(ref(db, 'config'), configFaltante);
+      contagem.configuracoes = Object.keys(configFaltante).length;
+    }
+
+    const categoriasSnapshot = await get(ref(db, 'categorias'));
+    const categoriasAtuais = categoriasSnapshot.val() || {};
+    const mapaCategorias = new Map();
+    for (const categoria of localCategorias) {
+      const equivalente = categoriasAtuais[categoria.id]
+        ? [categoria.id, categoriasAtuais[categoria.id]]
+        : Object.entries(categoriasAtuais).find(([, atual]) => assinaturaColecao('categorias', atual) === assinaturaColecao('categorias', categoria));
+      if (equivalente) {
+        if (categoria.id) mapaCategorias.set(categoria.id, equivalente[0]);
+        const { id: idLocal, ...dados } = categoria;
+        await update(ref(db, `categorias/${equivalente[0]}`), dados);
+        categoriasAtuais[equivalente[0]] = { ...categoriasAtuais[equivalente[0]], ...dados };
+        contagem.categorias++;
+        continue;
+      }
+      const { id: idLocal, ...dados } = categoria;
+      const novo = push(ref(db, 'categorias'));
+      await set(novo, dados);
+      categoriasAtuais[novo.key] = dados;
+      if (idLocal) mapaCategorias.set(idLocal, novo.key);
+      contagem.categorias++;
+    }
+
+    const produtosSnapshot = await get(ref(db, 'produtos'));
+    const produtosAtuais = produtosSnapshot.val() || {};
+    const mapaProdutos = new Map();
+    for (const produto of localProdutos) {
+      const assinatura = assinaturaColecao('produtos', produto, mapaCategorias);
+      const equivalente = produtosAtuais[produto.id]
+        ? [produto.id, produtosAtuais[produto.id]]
+        : Object.entries(produtosAtuais).find(([, atual]) => atual.id === produto.id || assinaturaColecao('produtos', atual, mapaCategorias) === assinatura);
+      const { id: idLocal, ...dados } = produto;
+      dados.categoriaId = mapaCategorias.get(dados.categoriaId) || dados.categoriaId;
+      if (equivalente) {
+        await set(ref(db, `produtos/${equivalente[0]}`), dados);
+        produtosAtuais[equivalente[0]] = dados;
+        if (idLocal) mapaProdutos.set(idLocal, equivalente[0]);
+        contagem.produtos++;
+        continue;
+      }
+      const novo = push(ref(db, 'produtos'));
+      await set(novo, dados);
+      produtosAtuais[novo.key] = dados;
+      if (idLocal) mapaProdutos.set(idLocal, novo.key);
+      contagem.produtos++;
+    }
+
+    const clientesSnapshot = await get(ref(db, 'clientes'));
+    const clientesAtuais = clientesSnapshot.val() || {};
+    for (const cliente of localClientes) {
+      const telefone = String(cliente.telefoneLimpo || cliente.telefone || cliente.id || '').replace(/\D/g, '');
+      if (!telefone || clientesAtuais[telefone]) {
+        contagem.ignorados++;
+        continue;
+      }
+      await set(ref(db, `clientes/${telefone}`), {
+        nome: String(cliente.nome || ''),
+        telefone: String(cliente.telefone || telefone),
+        telefoneLimpo: telefone,
+        ...(cliente.endereco ? { endereco: String(cliente.endereco) } : {}),
+        ...(cliente.referencia ? { referencia: String(cliente.referencia) } : {}),
+        atualizadoEm: cliente.atualizadoEm || new Date().toISOString(),
+        atualizadoEmTimestamp: Number(cliente.atualizadoEmTimestamp) || Date.now()
+      });
+      clientesAtuais[telefone] = cliente;
+      contagem.clientes++;
+    }
+
+    const pedidosSnapshot = await get(ref(db, 'pedidos'));
+    const privadosSnapshot = await get(ref(db, 'pedidosPrivados'));
+    const pedidosAtuais = pedidosSnapshot.val() || {};
+    const privadosAtuais = privadosSnapshot.val() || {};
+    const assinaturasPedidos = new Set(Object.entries(pedidosAtuais).map(([id, pedido]) => assinaturaPedido(pedido, privadosAtuais[id])));
+    for (const pedido of localPedidos) {
+      const assinatura = assinaturaPedido(pedido, pedido);
+      if (pedidosAtuais[pedido.id] || assinaturasPedidos.has(assinatura)) {
+        contagem.ignorados++;
+        continue;
+      }
+      const idNova = push(ref(db, 'pedidos')).key;
+      const status = pedido.status === 'Novo' ? 'Recebido' : pedido.status || 'Recebido';
+      const dataInicial = pedido.criadoEm || new Date().toISOString();
+      const historicoLegado = Object.values(pedido.historico || {}).filter((evento) => evento && evento.status);
+      const historico = historicoLegado.length
+        ? Object.fromEntries(historicoLegado.map((evento) => {
+          const eventoStatus = evento.status === 'Novo' ? 'Recebido' : evento.status;
+          return [push(ref(db, `pedidos/${idNova}/historico`)).key, {
+            status: eventoStatus,
+            dataHora: evento.dataHora || dataInicial,
+            ...(evento.motivo ? { motivo: String(evento.motivo).slice(0, 500) } : {})
+          }];
+        }))
+        : { [push(ref(db, `pedidos/${idNova}/historico`)).key]: { status, dataHora: dataInicial } };
+      const itensPrivados = (pedido.itens || []).map((item) => ({
+        id: mapaProdutos.get(item.id) || item.id,
+        nome: String(item.nome || 'Item'),
+        quantidade: Number(item.quantidade) || 1,
+        precoUnit: Number(item.precoUnit) || 0,
+        ...(item.observacao ? { observacao: String(item.observacao).slice(0, 240) } : {})
+      }));
+      const clientePrivado = {
+        nome: String(pedido.cliente?.nome || 'Cliente'),
+        telefone: String(pedido.cliente?.telefone || ''),
+        ...(pedido.cliente?.endereco ? { endereco: String(pedido.cliente.endereco).slice(0, 240) } : {}),
+        ...(pedido.cliente?.referencia ? { referencia: String(pedido.cliente.referencia).slice(0, 240) } : {})
+      };
+      const subtotalPedido = Number(pedido.subtotal) || 0;
+      const taxaPedido = Number(pedido.taxa) || 0;
+      const publico = {
+        numero: Number(pedido.numero) || Date.now(),
+        status,
+        criadoEm: dataInicial,
+        criadoEmTimestamp: Number(pedido.criadoEmTimestamp) || Date.now(),
+        tipo: pedido.tipo === 'retirada' ? 'retirada' : 'entrega',
+        itens: itensPrivados.map(({ id, nome, quantidade, precoUnit }) => ({ id, nome, quantidade, precoUnit })),
+        subtotal: subtotalPedido,
+        taxa: taxaPedido,
+        total: Number(pedido.total) || 0,
+        pagamento: pedido.pagamento?.forma || pedido.pagamento || 'não informado',
+        historico
+      };
+      const privado = {
+        cliente: clientePrivado,
+        itens: itensPrivados,
+        subtotal: subtotalPedido,
+        taxa: taxaPedido,
+        pagamento: pedido.pagamento || { forma: 'pix' },
+        observacaoGeral: pedido.observacaoGeral || '',
+        criadoEmTimestamp: Number(pedido.criadoEmTimestamp) || Date.now()
+      };
+      await update(ref(db), {
+        [`pedidos/${idNova}`]: publico,
+        [`pedidosPrivados/${idNova}`]: privado
+      });
+      pedidosAtuais[idNova] = publico;
+      privadosAtuais[idNova] = privado;
+      assinaturasPedidos.add(assinaturaPedido(publico, privado));
+      contagem.pedidos++;
+    }
+
+    localStorage.setItem(chaveMigracao, JSON.stringify({ concluidaEm: new Date().toISOString(), contagem }));
+    return contagem;
+  } catch (erro) {
+    reportarErroFirebase('migração de dados locais', 'config, categorias, produtos, clientes e pedidos', erro);
+    throw erro;
   }
 }
 

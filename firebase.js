@@ -1,25 +1,26 @@
-// ==========================================================================
-// Lanchonete Casa Branca - Configuração do Firebase
-// ==========================================================================
-// Substitua as credenciais abaixo pelas chaves do seu projeto no Firebase Console:
-// 1. Acesse https://console.firebase.google.com/
-// 2. Crie ou selecione seu projeto.
-// 3. Ative o "Realtime Database" e selecione "Iniciar no modo de teste" ou configure as regras.
-// 4. Ative o "Authentication" com o provedor "E-mail/senha".
-// 5. Crie um aplicativo web e copie as credenciais do objeto firebaseConfig para cá.
-// ==========================================================================
-
+// Configuração única do Firebase e valores usados exclusivamente no seed inicial.
+// Substitua todos os marcadores pelas credenciais do mesmo app Web do Firebase.
 export const firebaseConfig = {
-  apiKey: "SUA_API_KEY_AQUI",
-  authDomain: "seu-projeto-casa-branca.firebaseapp.com",
-  databaseURL: "https://seu-projeto-casa-branca-default-rtdb.firebaseio.com",
-  projectId: "seu-projeto-casa-branca",
-  storageBucket: "seu-projeto-casa-branca.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000"
+  apiKey: "AIzaSyDJ-AHX8tL18MWlL8RLtVKm9286oeRyT3s",
+  authDomain: "lanchonete-casa-branca.firebaseapp.com",
+  databaseURL: "https://lanchonete-casa-branca-default-rtdb.firebaseio.com",
+  projectId: "lanchonete-casa-branca",
+  storageBucket: "lanchonete-casa-branca.firebasestorage.app",
+  messagingSenderId: "173976084313",
+  appId: "1:173976084313:web:e56aa144fb780441747648"
 };
 
-// Configurações padrão da lanchonete (usadas caso o banco ainda não tenha sido iniciado)
+export const ADMIN_UID = 'kdPgOUtKk7WUghUIoBacvJEaIPg2';
+export const ADMIN_UID_CONFIGURADO = Boolean(ADMIN_UID && !ADMIN_UID.startsWith('COLE_'));
+
+const MARCADORES_CONFIG = ['COLE_AQUI', 'COLE_A_URL', 'SEU_PROJETO'];
+const URL_REALTIME_DATABASE_VALIDA = /^https:\/\/[a-z0-9.-]+(?:firebasedatabase\.app|firebaseio\.com)$/i.test(firebaseConfig.databaseURL);
+
+export const firebaseConfigValida = URL_REALTIME_DATABASE_VALIDA && Object.values(firebaseConfig).every((valor) =>
+  typeof valor === 'string' && valor.length > 0 && !MARCADORES_CONFIG.some((marcador) => valor.includes(marcador))
+);
+
+// Os dados abaixo só podem ser gravados no RTDB pelo seed autenticado do admin.
 export const CONFIG_PADRAO = {
   nome: "Lanchonete Casa Branca",
   slogan: "O sabor que faz você se sentir em casa.",
@@ -32,7 +33,7 @@ export const CONFIG_PADRAO = {
   taxaAtiva: true,
   taxaValor: 3.00,
   minimoEntrega: 10.00,
-  modoDestaque: "promocoes", // "promocoes" ou "destaques"
+  modoDestaque: "promocoes",
   statusWhatsappAutomaticos: [
     "Em preparo",
     "Saiu para entrega",

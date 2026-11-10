@@ -4,6 +4,7 @@
 
 import { formatarMoeda, mostrarToast, sanitizarTexto, limparTelefone, mascaraTelefone } from "./utils.js";
 import { salvarCliente, buscarClientePorTelefone, criarPedido } from "./firebase-service.js";
+import { normalizarTelefoneWhatsApp } from "../notificacoes.js";
 
 class CarrinhoService {
   constructor() {
@@ -13,6 +14,7 @@ class CarrinhoService {
     this.formaPagamento = 'pix'; // 'pix', 'dinheiro', 'cartao'
     this.trocoPara = '';
     this.obsGeral = '';
+    this.pedidoEmEnvio = false;
     this.cliente = {
       nome: '',
       telefone: '',
@@ -54,6 +56,29 @@ class CarrinhoService {
       this.tipoEntrega = 'retirada';
     }
     this.atualizarInterface();
+  }
+
+  sincronizarProdutosOnline(produtos) {
+    const produtosPorId = new Map();
+    produtos.forEach((produto) => {
+      produtosPorId.set(produto.id, produto);
+      if (produto.idLegado) produtosPorId.set(produto.idLegado, produto);
+    });
+
+    let removidos = 0;
+    this.itens = this.itens.reduce((itensAtuais, item) => {
+      const produtoAtual = produtosPorId.get(item.produto.id);
+      if (!produtoAtual || produtoAtual.disponivel === false) {
+        removidos++;
+        return itensAtuais;
+      }
+      itensAtuais.push({ ...item, produto: produtoAtual });
+      return itensAtuais;
+    }, []);
+
+    this.salvarCacheLocalStorage();
+    this.atualizarInterface();
+    if (removidos) mostrarToast('Itens indisponíveis ou removidos foram retirados da sacola após atualizar o cardápio.', 'alerta', 7000);
   }
 
   adicionarItem(produto, quantidade = 1, observacao = '') {
@@ -264,14 +289,23 @@ class CarrinhoService {
     const lojaFechada = this.config && !this.config.aberto;
 
     if (elBtnFinalizar) {
-      elBtnFinalizar.disabled = bloqueadoPorMinimo || lojaFechada || this.itens.length === 0;
+      elBtnFinalizar.disabled = this.pedidoEmEnvio || bloqueadoPorMinimo || lojaFechada || this.itens.length === 0;
     }
   }
 
   async confirmarPedido() {
+    if (this.pedidoEmEnvio) {
+      mostrarToast('Seu pedido já está sendo enviado. Aguarde a confirmação.', 'info');
+      return;
+    }
+
     // 1. Validação de loja aberta
     if (this.config && !this.config.aberto) {
       mostrarToast('A lanchonete está fechada no momento. Não é possível enviar pedidos.', 'erro');
+      return;
+    }
+    if (!normalizarTelefoneWhatsApp(this.config?.whatsapp)) {
+      mostrarToast('O contato do WhatsApp da lanchonete está ausente ou inválido nas configurações do banco.', 'erro', 7000);
       return;
     }
 
@@ -295,6 +329,20 @@ class CarrinhoService {
     const refCli = inputRef ? inputRef.value.trim() : this.cliente.referencia;
     this.obsGeral = inputObsGeral ? inputObsGeral.value.trim() : '';
     this.trocoPara = inputTroco ? inputTroco.value.trim() : '';
+    if (this.formaPagamento === 'dinheiro' && this.trocoPara) {
+      // Aceita "50", "50,00" ou "1.050,50" e guarda como número (as regras exigem número)
+      const bruto = this.trocoPara.replace(/[^\d.,]/g, '');
+      const normalizado = bruto.includes(',') ? bruto.replace(/\./g, '').replace(',', '.') : bruto;
+      const valor = parseFloat(normalizado);
+      if (!Number.isFinite(valor) || valor <= 0) {
+        mostrarToast('Informe um valor válido para o troco (ex: 50,00) ou deixe em branco.', 'alerta');
+        if (inputTroco) inputTroco.focus();
+        return;
+      }
+      this.trocoPara = valor;
+    } else {
+      this.trocoPara = '';
+    }
 
     if (!nome) {
       mostrarToast('Por favor, informe seu nome.', 'alerta');
@@ -324,52 +372,57 @@ class CarrinhoService {
       return;
     }
 
-    // Atualiza dados internos do cliente
-    this.cliente = {
-      nome,
-      telefone: tel,
-      endereco: end,
-      referencia: refCli
-    };
-    this.salvarCacheLocalStorage();
+    this.pedidoEmEnvio = true;
+    const btnFinalizar = document.getElementById('btn-finalizar-pedido');
+    if (btnFinalizar) btnFinalizar.disabled = true;
 
-    // 5. Salva/Atualiza cliente no Firebase Realtime Database
+    let pedidoCriado;
+    let numeroPedido;
     try {
-      await salvarCliente(this.cliente);
-    } catch (e) {
-      console.warn("Não foi possível salvar cliente no banco (offline ou sem credenciais):", e);
-    }
+      this.cliente = { nome, telefone: tel, endereco: end, referencia: refCli };
+      this.salvarCacheLocalStorage();
 
-    // 6. Prepara objeto do pedido para salvar no Firebase
-    const pedidoPayload = {
-      cliente: this.cliente,
-      itens: this.itens.map(it => ({
-        id: it.produto.id || '',
-        nome: it.produto.nome,
-        quantidade: it.quantidade,
-        precoUnit: it.produto.precoPromo || it.produto.preco,
-        observacao: it.observacao || ''
-      })),
-      tipo: this.tipoEntrega, // 'entrega' ou 'retirada'
-      subtotal: this.getSubtotal(),
-      taxa: this.getTaxaEntrega(),
-      total: this.getTotal(),
-      pagamento: {
-        forma: this.formaPagamento,
-        trocoPara: this.formaPagamento === 'dinheiro' ? this.trocoPara : null
-      },
-      observacaoGeral: this.obsGeral
-    };
-
-    let pedidoCriado = null;
-    let numeroPedido = Math.floor(1000 + Math.random() * 9000);
-    try {
-      pedidoCriado = await criarPedido(pedidoPayload);
-      if (pedidoCriado && pedidoCriado.numero) {
-        numeroPedido = pedidoCriado.numero;
+      try {
+        await salvarCliente(this.cliente);
+      } catch (erroCliente) {
+        if (String(erroCliente.code || erroCliente.message).toUpperCase().includes('PERMISSION_DENIED')) {
+          // Cliente recorrente: o cadastro já existe e só o admin pode alterá-lo. Não é um erro para o cliente.
+          console.info('Cadastro do cliente já existe; mantido sem alterações.');
+        } else {
+          console.error('Não foi possível salvar o cadastro do cliente no Firebase:', erroCliente);
+          mostrarToast(`Cadastro não sincronizado: ${erroCliente.message}. O pedido ainda será tentado.`, 'alerta', 7000);
+        }
       }
-    } catch (e) {
-      console.warn("Não foi possível salvar pedido no banco (seguindo via WhatsApp):", e);
+
+      const pedidoPayload = {
+        cliente: this.cliente,
+        itens: this.itens.map((item) => ({
+          id: item.produto.id || '',
+          nome: item.produto.nome,
+          quantidade: item.quantidade,
+          precoUnit: item.produto.precoPromo || item.produto.preco,
+          observacao: item.observacao || ''
+        })),
+        tipo: this.tipoEntrega,
+        subtotal: this.getSubtotal(),
+        taxa: this.getTaxaEntrega(),
+        total: this.getTotal(),
+        pagamento: {
+          forma: this.formaPagamento,
+          trocoPara: this.formaPagamento === 'dinheiro' && this.trocoPara ? this.trocoPara : null
+        },
+        observacaoGeral: this.obsGeral
+      };
+
+      pedidoCriado = await criarPedido(pedidoPayload);
+      numeroPedido = pedidoCriado.numero;
+    } catch (erro) {
+      console.error('Não foi possível registrar o pedido no Firebase:', erro);
+      mostrarToast(`Pedido não registrado. O carrinho foi mantido. Verifique a conexão e tente novamente. ${erro.message}`, 'erro', 9000);
+      return;
+    } finally {
+      this.pedidoEmEnvio = false;
+      this.atualizarInterface();
     }
 
     // 7. Monta mensagem amigável e estruturada para WhatsApp
@@ -377,13 +430,14 @@ class CarrinhoService {
       ? `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, '')}acompanhar.html?pedido=${encodeURIComponent(pedidoCriado.id)}`
       : '';
     const msgWhatsApp = this.montarMensagemWhatsApp(numeroPedido, linkAcompanhamento);
-    const whatsappNum = (this.config && this.config.whatsapp) ? limparTelefone(this.config.whatsapp) : '74999177156';
-    const linkZap = `https://wa.me/55${whatsappNum}?text=${encodeURIComponent(msgWhatsApp)}`;
+    const whatsappNum = normalizarTelefoneWhatsApp(this.config.whatsapp);
+    const linkZap = `https://wa.me/${whatsappNum}?text=${encodeURIComponent(msgWhatsApp)}`;
 
     // 8. Limpa o carrinho e fecha modal
     this.limparCarrinho();
     const modal = document.getElementById('modal-carrinho');
     if (modal) modal.classList.remove('ativo');
+    document.body.style.overflow = '';
 
     mostrarToast('Pedido enviado com sucesso! Abrindo o WhatsApp...', 'sucesso', 4000);
 
@@ -395,8 +449,10 @@ class CarrinhoService {
   }
 
   montarMensagemWhatsApp(numeroPedido, linkAcompanhamento = '') {
+    const nomeLanchonete = this.config?.nome || 'Lanchonete';
+    const localRetirada = this.config?.local || 'local de retirada';
     const horaAgora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    let msg = `🏡 *PEDIDO #${numeroPedido} - LANCHONETE CASA BRANCA*\n`;
+    let msg = `🏡 *PEDIDO #${numeroPedido} - ${nomeLanchonete}*\n`;
     msg += `🕒 _${horaAgora}_\n`;
     msg += `------------------------------------\n`;
     msg += `👤 *Cliente:* ${this.cliente.nome}\n`;
@@ -409,7 +465,7 @@ class CarrinhoService {
         msg += `🎯 *Ponto de Ref.:* ${this.cliente.referencia}\n`;
       }
     } else {
-      msg += `📍 *Retirar em:* Praça da quadra\n`;
+      msg += `📍 *Retirar em:* ${localRetirada}\n`;
     }
 
     msg += `------------------------------------\n`;
@@ -451,7 +507,7 @@ class CarrinhoService {
 
     msg += `------------------------------------\n`;
     if (linkAcompanhamento) msg += `📲 *Acompanhe seu pedido:* ${linkAcompanhamento}\n`;
-    msg += `_Obrigado pela preferência! "O sabor que faz você se sentir em casa."_`;
+    msg += `_Obrigado pela preferência! "${this.config?.slogan || ''}"_`;
 
     return msg;
   }

@@ -19,9 +19,13 @@ export function formatarMoeda(valor) {
  */
 export function sanitizarTexto(str) {
   if (typeof str !== 'string') return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  // Escapa também aspas, para uso seguro dentro de atributos HTML (alt="...", value="...")
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**

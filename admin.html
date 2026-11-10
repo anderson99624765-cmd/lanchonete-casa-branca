@@ -44,6 +44,7 @@
       <span class="login-pre-titulo">Lanchonete Casa Branca</span>
       <h1 class="login-titulo">Área do Proprietário</h1>
       <p class="login-sub">Painel restrito de gerenciamento e pedidos</p>
+      <p id="admin-login-database-status" class="database-status database-status-error" role="status" aria-live="polite">🔴 Firebase não configurado. Preencha js/firebase.js.</p>
 
       <form id="form-login-admin" style="display:flex; flex-direction:column; gap:1.1rem; text-align:left;">
         
@@ -124,6 +125,7 @@
           </svg>
           <span>Casa Branca • Painel do Dono</span>
         </div>
+        <p id="admin-database-status" class="admin-database-status" role="status" aria-live="polite">🔴 Sem conexão com o banco de dados</p>
         <div class="admin-nav-acoes">
           <a href="index.html" target="_blank" class="btn-nav-site">👁️ Ver Cardápio</a>
           <button id="btn-admin-logout" class="btn-logout" title="Encerrar sessão de forma segura">
@@ -329,7 +331,7 @@
               </div>
               <div class="form-group">
                 <label for="cfg-local" class="form-label">Localização (Retirada)</label>
-                <input type="text" id="cfg-local" class="form-input" value="Praça da quadra" required>
+                <input type="text" id="cfg-local" class="form-input" required>
               </div>
               <div class="form-group">
                 <label for="cfg-modo-destaque" class="form-label">Modo da Seção Especial</label>
@@ -386,6 +388,14 @@
             <div id="whatsapp-template-list" class="whatsapp-template-list"></div>
             <button type="submit" class="btn-adicionar">💾 Salvar mensagens e avisos automáticos</button>
           </form>
+        </div>
+
+        <div class="admin-secao-card">
+          <h2 class="admin-secao-titulo">Migração de dados deste aparelho</h2>
+          <p>Envia configurações, categorias, produtos, clientes e pedidos locais antigos para o Firebase. Registros existentes são ignorados para evitar duplicação.</p>
+          <button type="button" id="btn-migrar-dados-firebase" class="btn-adicionar">☁️ Enviar dados deste aparelho para o banco</button>
+          <a class="btn-nav-site" href="diagnostico.html" target="_blank" rel="noopener">Abrir diagnóstico do Firebase</a>
+          <p id="resultado-migracao-firebase" role="status" aria-live="polite"></p>
         </div>
 
         <!-- Seletor de Cores da Paleta -->
