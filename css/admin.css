@@ -965,3 +965,23 @@
   padding: 1.5rem;
   box-shadow: var(--shadow-lg);
 }
+
+
+/* Upload de foto do produto */
+.foto-upload { display: flex; gap: 0.9rem; align-items: center; }
+.foto-upload-previa {
+  display: grid; place-items: center; flex: 0 0 110px; width: 110px; height: 110px;
+  overflow: hidden; border: 2px dashed rgba(122, 31, 18, 0.35); border-radius: 12px;
+  background: var(--bg-cream); color: #6B4E3D; font-size: 0.8rem; font-weight: 700;
+}
+.foto-upload-previa img { width: 100%; height: 100%; object-fit: cover; }
+.foto-upload-acoes { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; min-width: 0; }
+.foto-upload-acoes small { color: #666; }
+.foto-upload-remover {
+  padding: 0.35rem 0.7rem; border: 1px solid #D32F2F; border-radius: 8px;
+  color: #D32F2F; background: #fff; font-weight: 800; cursor: pointer;
+}
+@media (max-width: 420px) {
+  .foto-upload { flex-direction: column; align-items: stretch; }
+  .foto-upload-previa { width: 100%; flex-basis: 160px; height: 160px; }
+}

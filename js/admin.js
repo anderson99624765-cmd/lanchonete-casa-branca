@@ -1236,6 +1236,102 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
     }
 
+    // ----- Foto do produto: upload de arquivo com compressão no navegador -----
+    const FOTO_MAX_LADO = 720;          // px do maior lado
+    const FOTO_MAX_CARACTERES = 190000; // limite da regra do banco (200000) com folga
+    const FOTO_MAX_ARQUIVO_MB = 15;
+    const inputFotoValor = document.getElementById('prod-foto');
+    const inputFotoArquivo = document.getElementById('prod-foto-arquivo');
+    const imgFotoPrevia = document.getElementById('prod-foto-previa');
+    const spanFotoVazio = document.getElementById('prod-foto-vazio');
+    const btnEscolherFoto = document.getElementById('btn-escolher-foto');
+    const btnRemoverFoto = document.getElementById('btn-remover-foto');
+    const infoFoto = document.getElementById('prod-foto-info');
+    const INFO_FOTO_PADRAO = 'JPG, PNG ou WebP. A imagem é ajustada automaticamente.';
+    let processandoFoto = false;
+
+    function atualizarPreviaFoto(valor) {
+      const temFoto = Boolean(valor);
+      if (inputFotoValor) inputFotoValor.value = valor || '';
+      if (imgFotoPrevia) {
+        if (temFoto) imgFotoPrevia.src = valor; else imgFotoPrevia.removeAttribute('src');
+        imgFotoPrevia.hidden = !temFoto;
+      }
+      if (spanFotoVazio) spanFotoVazio.hidden = temFoto;
+      if (btnRemoverFoto) btnRemoverFoto.hidden = !temFoto;
+      if (btnEscolherFoto) btnEscolherFoto.textContent = temFoto ? '🔄 Trocar foto' : '📷 Escolher foto';
+      if (infoFoto) infoFoto.textContent = INFO_FOTO_PADRAO;
+      if (inputFotoArquivo) inputFotoArquivo.value = '';
+    }
+    window.atualizarPreviaFotoProduto = atualizarPreviaFoto;
+
+    function carregarImagem(arquivo) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(arquivo);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não foi possível ler esta imagem.')); };
+        img.src = url;
+      });
+    }
+
+    async function comprimirImagem(arquivo) {
+      const img = await carregarImagem(arquivo);
+      let lado = FOTO_MAX_LADO;
+      let qualidade = 0.82;
+      for (let tentativa = 0; tentativa < 8; tentativa++) {
+        const escala = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * escala));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; // PNG com transparência vira fundo branco
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        let dataUrl = canvas.toDataURL('image/webp', qualidade);
+        if (!dataUrl.startsWith('data:image/webp')) dataUrl = canvas.toDataURL('image/jpeg', qualidade);
+        if (dataUrl.length <= FOTO_MAX_CARACTERES) return dataUrl;
+        qualidade = Math.max(0.5, qualidade - 0.08);
+        lado = Math.round(lado * 0.85);
+      }
+      throw new Error('Não foi possível reduzir esta imagem o suficiente. Tente uma foto menor.');
+    }
+
+    if (btnEscolherFoto && inputFotoArquivo) {
+      btnEscolherFoto.addEventListener('click', () => inputFotoArquivo.click());
+      inputFotoArquivo.addEventListener('change', async () => {
+        const arquivo = inputFotoArquivo.files && inputFotoArquivo.files[0];
+        if (!arquivo) return;
+        if (!/^image\/(jpeg|png|webp)$/.test(arquivo.type)) {
+          mostrarToast('Escolha uma imagem JPG, PNG ou WebP.', 'alerta');
+          inputFotoArquivo.value = '';
+          return;
+        }
+        if (arquivo.size > FOTO_MAX_ARQUIVO_MB * 1024 * 1024) {
+          mostrarToast(`A imagem é muito grande (máximo ${FOTO_MAX_ARQUIVO_MB} MB).`, 'alerta');
+          inputFotoArquivo.value = '';
+          return;
+        }
+        processandoFoto = true;
+        btnEscolherFoto.disabled = true;
+        if (infoFoto) infoFoto.textContent = 'Processando imagem...';
+        try {
+          const dataUrl = await comprimirImagem(arquivo);
+          atualizarPreviaFoto(dataUrl);
+          if (infoFoto) infoFoto.textContent = `Foto pronta (${Math.round(dataUrl.length / 1024)} KB). Clique em Salvar Produto para confirmar.`;
+        } catch (erro) {
+          console.error('Erro ao processar foto:', erro);
+          mostrarToast(erro.message || 'Erro ao processar a imagem.', 'erro');
+          if (infoFoto) infoFoto.textContent = INFO_FOTO_PADRAO;
+        } finally {
+          processandoFoto = false;
+          btnEscolherFoto.disabled = false;
+          inputFotoArquivo.value = '';
+        }
+      });
+    }
+    if (btnRemoverFoto) btnRemoverFoto.addEventListener('click', () => atualizarPreviaFoto(''));
+
     // Modal Produto
     const modalProd = document.getElementById('modal-admin-produto');
     const formProd = document.getElementById('form-modal-produto');
@@ -1246,6 +1342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       btnNovoProd.onclick = () => {
         document.getElementById('modal-prod-id').value = '';
         formProd.reset();
+        atualizarPreviaFoto('');
         document.getElementById('prod-disponivel').checked = true;
         document.getElementById('modal-prod-titulo').textContent = 'Novo Produto';
         modalProd.classList.add('ativo');
@@ -1274,6 +1371,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (precoPromo !== null && precoPromo >= precoNormal) {
           mostrarToast('Atenção: O preço promocional deve ser menor que o preço normal.', 'alerta');
+          return;
+        }
+
+        if (processandoFoto) {
+          mostrarToast('Aguarde o processamento da foto terminar.', 'alerta');
           return;
         }
 
@@ -1362,7 +1464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('prod-preco').value = prod.preco || 0;
       document.getElementById('prod-preco-promo').value = prod.precoPromo || '';
       document.getElementById('prod-categoria').value = prod.categoriaId || '';
-      document.getElementById('prod-foto').value = prod.foto || '';
+      if (window.atualizarPreviaFotoProduto) window.atualizarPreviaFotoProduto(prod.foto || '');
       document.getElementById('prod-obs').value = prod.obs || '';
       document.getElementById('prod-disponivel').checked = prod.disponivel !== false;
       document.getElementById('prod-destaque').checked = !!prod.destaque;
