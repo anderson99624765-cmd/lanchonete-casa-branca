@@ -614,9 +614,20 @@
           <textarea id="prod-descricao" class="form-textarea" rows="2" placeholder="Descreva os ingredientes de dar água na boca..."></textarea>
         </div>
         <div class="form-group">
-          <label for="prod-foto" class="form-label">URL da Foto</label>
-          <input type="url" id="prod-foto" class="form-input" placeholder="https://exemplo.com/foto-do-lanche.jpg">
-          <small style="color:#666;">Dica: Use links diretos do Unsplash, Imgur ou do seu Firebase Storage.</small>
+          <span class="form-label" id="prod-foto-rotulo">Foto do Produto</span>
+          <input type="hidden" id="prod-foto">
+          <div class="foto-upload">
+            <div class="foto-upload-previa" id="prod-foto-previa-wrap">
+              <img id="prod-foto-previa" alt="Prévia da foto do produto" hidden>
+              <span id="prod-foto-vazio">Sem foto</span>
+            </div>
+            <div class="foto-upload-acoes">
+              <input type="file" id="prod-foto-arquivo" accept="image/jpeg,image/png,image/webp" hidden aria-labelledby="prod-foto-rotulo">
+              <button type="button" class="btn-adicionar" id="btn-escolher-foto">📷 Escolher foto</button>
+              <button type="button" class="foto-upload-remover" id="btn-remover-foto" hidden>Remover foto</button>
+              <small id="prod-foto-info">JPG, PNG ou WebP. A imagem é ajustada automaticamente.</small>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label for="prod-obs" class="form-label">Observação Especial no Card</label>
